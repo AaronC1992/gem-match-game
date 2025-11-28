@@ -260,6 +260,27 @@ function highlightGem(row, col, highlight) {
     if (gem) gem.classList.toggle('selected', highlight);
 }
 
+function animateSwap(gem1, gem2) {
+    const el1 = document.querySelector(`[data-row="${gem1.row}"][data-col="${gem1.col}"]`);
+    const el2 = document.querySelector(`[data-row="${gem2.row}"][data-col="${gem2.col}"]`);
+    if (!el1 || !el2) return;
+    
+    const dx = (gem2.col - gem1.col) * 100;
+    const dy = (gem2.row - gem1.row) * 100;
+    
+    el1.style.transition = 'transform 0.25s ease-out';
+    el2.style.transition = 'transform 0.25s ease-out';
+    el1.style.transform = `translate(${dx}%, ${dy}%)`;
+    el2.style.transform = `translate(${-dx}%, ${-dy}%)`;
+    
+    setTimeout(() => {
+        el1.style.transition = '';
+        el2.style.transition = '';
+        el1.style.transform = '';
+        el2.style.transform = '';
+    }, 250);
+}
+
 function areAdjacent(gem1, gem2) {
     const rowDiff = Math.abs(gem1.row - gem2.row);
     const colDiff = Math.abs(gem1.col - gem2.col);
@@ -269,16 +290,21 @@ function areAdjacent(gem1, gem2) {
 async function swapGems(gem1, gem2) {
     isProcessing = true;
     
+    // Animate swap visually first
+    animateSwap(gem1, gem2);
+    
     // Swap gems in board
     const temp = board[gem1.row][gem1.col];
     board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
     board[gem2.row][gem2.col] = temp;
     
-    // Update visually
+    await wait(250);
+    
+    // Update DOM to match board state
     updateGem(gem1.row, gem1.col);
     updateGem(gem2.row, gem2.col);
     
-    await wait(200);
+    await wait(100);
     
     const matches = checkMatches();
     
@@ -454,24 +480,23 @@ async function processMatches() {
         matches.forEach(match => {
             if (board[match.row][match.col].special !== 'striped' && 
                 board[match.row][match.col].special !== 'bomb') {
+                const gem = document.querySelector(`[data-row="${match.row}"][data-col="${match.col}"]`);
+                if (gem) {
+                    gem.classList.add('fade-out');
+                }
                 board[match.row][match.col] = { type: -1, special: null };
             }
         });
         
-        // Drop and fill
-        dropGems();
-        fillBoard();
-        renderBoard();
+        await wait(300);
         
-        await wait(100);
+        // Remove faded gems from DOM
+        document.querySelectorAll('.fade-out').forEach(gem => gem.remove());
         
-        // Add animations to new gems
-        document.querySelectorAll('.gem').forEach(gem => {
-            gem.classList.add('falling');
-            setTimeout(() => gem.classList.remove('falling'), 500);
-        });
+        // Drop and fill with physics animation
+        await animateGemDrop();
         
-        await wait(500);
+        await wait(400);
         
         matches = checkMatches();
     }
@@ -482,33 +507,84 @@ async function processMatches() {
     if (gameMode === 'classic' && !hasAvailableMove()) shuffleBoard();
 }
 
-function dropGems() {
+async function animateGemDrop() {
+    const dropPromises = [];
+    
     for (let col = 0; col < BOARD_SIZE; col++) {
-        let emptyRow = BOARD_SIZE - 1;
+        const columnGems = [];
+        const emptySpaces = [];
         
+        // Collect existing gems and empty spaces
         for (let row = BOARD_SIZE - 1; row >= 0; row--) {
             if (board[row][col].type !== -1) {
-                if (row !== emptyRow) {
-                    board[emptyRow][col] = board[row][col];
-                    board[row][col] = { type: -1, special: null };
+                columnGems.push({ row, data: board[row][col] });
+            } else {
+                emptySpaces.push(row);
+            }
+        }
+        
+        // Clear column in board
+        for (let row = 0; row < BOARD_SIZE; row++) {
+            board[row][col] = { type: -1, special: null };
+        }
+        
+        // Place existing gems at bottom
+        let targetRow = BOARD_SIZE - 1;
+        for (const gem of columnGems) {
+            const oldRow = gem.row;
+            board[targetRow][col] = gem.data;
+            
+            if (oldRow !== targetRow) {
+                const el = document.querySelector(`[data-row="${oldRow}"][data-col="${col}"]`);
+                if (el) {
+                    const distance = (targetRow - oldRow) * 100;
+                    el.dataset.row = targetRow;
+                    el.style.transition = `transform ${0.3 + distance/500}s cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
+                    el.style.transform = `translateY(${distance}%)`;
+                    
+                    dropPromises.push(new Promise(resolve => {
+                        setTimeout(() => {
+                            el.style.transition = '';
+                            el.style.transform = '';
+                            resolve();
+                        }, 300 + distance * 5);
+                    }));
                 }
-                emptyRow--;
             }
+            targetRow--;
+        }
+        
+        // Fill empty spaces with new gems from top
+        for (let i = 0; i < emptySpaces.length; i++) {
+            const row = i;
+            board[row][col] = {
+                type: Math.floor(Math.random() * GEM_TYPES),
+                special: null
+            };
+            
+            const gem = createGemElement(row, col);
+            gameBoard.appendChild(gem);
+            
+            const distance = (BOARD_SIZE - row) * 100;
+            gem.style.transform = `translateY(-${distance}%)`;
+            gem.style.opacity = '0';
+            
+            setTimeout(() => {
+                gem.style.transition = `transform ${0.4 + distance/400}s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s`;
+                gem.style.transform = 'translateY(0)';
+                gem.style.opacity = '1';
+            }, 50 + i * 50);
+            
+            dropPromises.push(new Promise(resolve => {
+                setTimeout(() => {
+                    gem.style.transition = '';
+                    resolve();
+                }, 400 + distance * 4 + i * 50);
+            }));
         }
     }
-}
-
-function fillBoard() {
-    for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
-            if (board[row][col].type === -1) {
-                board[row][col] = {
-                    type: Math.floor(Math.random() * GEM_TYPES),
-                    special: null
-                };
-            }
-        }
-    }
+    
+    await Promise.all(dropPromises);
 }
 
 function showComboPopup(combo) {
