@@ -290,38 +290,43 @@ function areAdjacent(gem1, gem2) {
 async function swapGems(gem1, gem2) {
     isProcessing = true;
     
-    // Animate swap visually first
+    // First check if this swap will create a match
+    const temp = board[gem1.row][gem1.col];
+    board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
+    board[gem2.row][gem2.col] = temp;
+    
+    const willMatch = checkMatches().length > 0;
+    
+    // Swap back temporarily for animation
+    board[gem2.row][gem2.col] = board[gem1.row][gem1.col];
+    board[gem1.row][gem1.col] = temp;
+    
+    if (!willMatch) {
+        // Invalid move - don't animate, just reject
+        AudioManager.invalid();
+        isProcessing = false;
+        selectedGem = null;
+        return;
+    }
+    
+    // Valid move - animate the swap
     animateSwap(gem1, gem2);
     
-    // Swap gems in board
-    const temp = board[gem1.row][gem1.col];
+    // Do the actual swap
     board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
     board[gem2.row][gem2.col] = temp;
     
     await wait(250);
     
-    // Update DOM to match board state
+    // Update DOM
     updateGem(gem1.row, gem1.col);
     updateGem(gem2.row, gem2.col);
     
-    await wait(100);
+    if (gameMode === 'classic') moves--;
+    updateDisplay();
+    AudioManager.match();
     
-    const matches = checkMatches();
-    
-    if (matches.length > 0) {
-        if (gameMode === 'classic') moves--;
-        updateDisplay();
-        AudioManager.match();
-        await processMatches();
-    } else {
-        // Invalid move - swap back
-        const temp = board[gem1.row][gem1.col];
-        board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
-        board[gem2.row][gem2.col] = temp;
-        updateGem(gem1.row, gem1.col);
-        updateGem(gem2.row, gem2.col);
-        AudioManager.invalid();
-    }
+    await processMatches();
     
     selectedGem = null;
     isProcessing = false;
@@ -496,8 +501,6 @@ async function processMatches() {
         // Drop and fill with physics animation
         await animateGemDrop();
         
-        await wait(400);
-        
         matches = checkMatches();
     }
     
@@ -508,83 +511,79 @@ async function processMatches() {
 }
 
 async function animateGemDrop() {
-    const dropPromises = [];
+    // First, calculate new positions for all gems
+    const moves = [];
+    const newGems = [];
     
     for (let col = 0; col < BOARD_SIZE; col++) {
         const columnGems = [];
-        const emptySpaces = [];
         
-        // Collect existing gems and empty spaces
+        // Collect non-empty gems from bottom to top
         for (let row = BOARD_SIZE - 1; row >= 0; row--) {
             if (board[row][col].type !== -1) {
                 columnGems.push({ row, data: board[row][col] });
-            } else {
-                emptySpaces.push(row);
             }
         }
         
-        // Clear column in board
+        // Clear the column
         for (let row = 0; row < BOARD_SIZE; row++) {
             board[row][col] = { type: -1, special: null };
         }
         
-        // Place existing gems at bottom
+        // Place existing gems at bottom and track moves
         let targetRow = BOARD_SIZE - 1;
         for (const gem of columnGems) {
-            const oldRow = gem.row;
             board[targetRow][col] = gem.data;
-            
-            if (oldRow !== targetRow) {
-                const el = document.querySelector(`[data-row="${oldRow}"][data-col="${col}"]`);
-                if (el) {
-                    const distance = (targetRow - oldRow) * 100;
-                    el.dataset.row = targetRow;
-                    el.style.transition = `transform ${0.3 + distance/500}s cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
-                    el.style.transform = `translateY(${distance}%)`;
-                    
-                    dropPromises.push(new Promise(resolve => {
-                        setTimeout(() => {
-                            el.style.transition = '';
-                            el.style.transform = '';
-                            resolve();
-                        }, 300 + distance * 5);
-                    }));
-                }
+            if (gem.row !== targetRow) {
+                moves.push({ oldRow: gem.row, newRow: targetRow, col });
             }
             targetRow--;
         }
         
-        // Fill empty spaces with new gems from top
-        for (let i = 0; i < emptySpaces.length; i++) {
-            const row = i;
-            board[row][col] = {
+        // Fill top with new gems
+        const emptyCount = targetRow + 1;
+        for (let i = 0; i < emptyCount; i++) {
+            board[i][col] = {
                 type: Math.floor(Math.random() * GEM_TYPES),
                 special: null
             };
-            
-            const gem = createGemElement(row, col);
-            gameBoard.appendChild(gem);
-            
-            const distance = (BOARD_SIZE - row) * 100;
-            gem.style.transform = `translateY(-${distance}%)`;
-            gem.style.opacity = '0';
-            
-            setTimeout(() => {
-                gem.style.transition = `transform ${0.4 + distance/400}s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s`;
-                gem.style.transform = 'translateY(0)';
-                gem.style.opacity = '1';
-            }, 50 + i * 50);
-            
-            dropPromises.push(new Promise(resolve => {
-                setTimeout(() => {
-                    gem.style.transition = '';
-                    resolve();
-                }, 400 + distance * 4 + i * 50);
-            }));
+            newGems.push({ row: i, col });
         }
     }
     
-    await Promise.all(dropPromises);
+    // Animate existing gems dropping
+    moves.forEach(move => {
+        const el = document.querySelector(`[data-row="${move.oldRow}"][data-col="${move.col}"]`);
+        if (el) {
+            const distance = (move.newRow - move.oldRow) * 100;
+            el.dataset.row = move.newRow;
+            el.style.transition = 'transform 0.3s ease-out';
+            el.style.transform = `translateY(${distance}%)`;
+            setTimeout(() => {
+                el.style.transition = '';
+                el.style.transform = '';
+            }, 300);
+        }
+    });
+    
+    // Add new gems with simple drop animation
+    newGems.forEach((gem, index) => {
+        const el = createGemElement(gem.row, gem.col);
+        gameBoard.appendChild(el);
+        el.style.transform = 'translateY(-100%)';
+        el.style.opacity = '0.5';
+        
+        setTimeout(() => {
+            el.style.transition = 'transform 0.4s ease-out, opacity 0.3s';
+            el.style.transform = 'translateY(0)';
+            el.style.opacity = '1';
+            setTimeout(() => {
+                el.style.transition = '';
+            }, 400);
+        }, 50);
+    });
+    
+    await wait(450);
 }
 
 function showComboPopup(combo) {
