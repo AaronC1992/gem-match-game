@@ -3,7 +3,6 @@ const BOARD_SIZE = 8;
 const GEM_TYPES = 6;
 const GEM_SYMBOLS = ['💎', '🔷', '⭐', '💜', '💚', '🌸'];
 
-// Game Modes Configuration
 const GAME_MODES = {
     classic: { moves: 30, time: null, name: 'Classic' },
     timed: { moves: null, time: 60, name: 'Time Attack' },
@@ -70,29 +69,11 @@ const AudioManager = {
         oscillator.stop(this.context.currentTime + duration);
     },
     
-    match() {
-        this.playTone(523.25, 0.1, 'sine'); // C note
-    },
-    
-    combo(level) {
-        const baseFreq = 523.25;
-        this.playTone(baseFreq * (1 + level * 0.2), 0.15, 'triangle');
-    },
-    
-    special() {
-        this.playTone(783.99, 0.2, 'square'); // G note
-        setTimeout(() => this.playTone(1046.50, 0.2, 'square'), 100); // C note
-    },
-    
-    invalid() {
-        this.playTone(200, 0.1, 'sawtooth');
-    },
-    
-    success() {
-        [261.63, 329.63, 392.00, 523.25].forEach((freq, i) => {
-            setTimeout(() => this.playTone(freq, 0.15, 'sine'), i * 80);
-        });
-    }
+    match() { this.playTone(523.25, 0.1, 'sine'); },
+    combo(level) { this.playTone(523.25 * (1 + level * 0.2), 0.15, 'triangle'); },
+    special() { this.playTone(783.99, 0.2, 'square'); setTimeout(() => this.playTone(1046.50, 0.2, 'square'), 100); },
+    invalid() { this.playTone(200, 0.1, 'sawtooth'); },
+    success() { [261.63, 329.63, 392.00, 523.25].forEach((freq, i) => { setTimeout(() => this.playTone(freq, 0.15, 'sine'), i * 80); }); }
 };
 
 // ========== PARTICLE EFFECTS ==========
@@ -103,15 +84,11 @@ function createParticles(x, y, color, count = 8) {
         particle.style.background = color;
         particle.style.left = x + 'px';
         particle.style.top = y + 'px';
-        
         document.body.appendChild(particle);
         
         const angle = (Math.PI * 2 * i) / count;
         const velocity = 2 + Math.random() * 3;
-        const vx = Math.cos(angle) * velocity;
-        const vy = Math.sin(angle) * velocity;
-        
-        animateParticle(particle, vx, vy);
+        animateParticle(particle, Math.cos(angle) * velocity, Math.sin(angle) * velocity);
     }
 }
 
@@ -124,18 +101,13 @@ function animateParticle(particle, vx, vy) {
         x += vx;
         y += vy;
         opacity -= 0.02;
-        
         particle.style.left = x + 'px';
         particle.style.top = y + 'px';
         particle.style.opacity = opacity;
         
-        if (opacity > 0) {
-            requestAnimationFrame(update);
-        } else {
-            particle.remove();
-        }
+        if (opacity > 0) requestAnimationFrame(update);
+        else particle.remove();
     }
-    
     update();
 }
 
@@ -151,41 +123,21 @@ const achievements = {
 };
 
 function checkAchievements() {
-    if (!achievements.firstMatch.unlocked && totalGemsMatched > 0) {
-        unlockAchievement('firstMatch');
-    }
-    if (!achievements.combo5.unlocked && maxCombo >= 5) {
-        unlockAchievement('combo5');
-    }
-    if (!achievements.combo10.unlocked && maxCombo >= 10) {
-        unlockAchievement('combo10');
-    }
-    if (!achievements.score1000.unlocked && score >= 1000) {
-        unlockAchievement('score1000');
-    }
-    if (!achievements.score5000.unlocked && score >= 5000) {
-        unlockAchievement('score5000');
-    }
-    if (!achievements.specialGem.unlocked && specialGemsCreated > 0) {
-        unlockAchievement('specialGem');
-    }
-    if (!achievements.gems100.unlocked && totalGemsMatched >= 100) {
-        unlockAchievement('gems100');
-    }
+    if (!achievements.firstMatch.unlocked && totalGemsMatched > 0) unlockAchievement('firstMatch');
+    if (!achievements.combo5.unlocked && maxCombo >= 5) unlockAchievement('combo5');
+    if (!achievements.combo10.unlocked && maxCombo >= 10) unlockAchievement('combo10');
+    if (!achievements.score1000.unlocked && score >= 1000) unlockAchievement('score1000');
+    if (!achievements.score5000.unlocked && score >= 5000) unlockAchievement('score5000');
+    if (!achievements.specialGem.unlocked && specialGemsCreated > 0) unlockAchievement('specialGem');
+    if (!achievements.gems100.unlocked && totalGemsMatched >= 100) unlockAchievement('gems100');
 }
 
 function unlockAchievement(key) {
     achievements[key].unlocked = true;
-    const achievement = achievements[key];
-    
-    document.getElementById('achievement-text').textContent = achievement.desc;
+    document.getElementById('achievement-text').textContent = achievements[key].desc;
     achievementPopup.classList.add('show');
-    
     AudioManager.success();
-    
-    setTimeout(() => {
-        achievementPopup.classList.remove('show');
-    }, 3000);
+    setTimeout(() => achievementPopup.classList.remove('show'), 3000);
 }
 
 // ========== INITIALIZE GAME ==========
@@ -205,18 +157,16 @@ function initGame(mode = 'classic') {
     isProcessing = false;
     
     if (gameTimer) clearInterval(gameTimer);
+    if (modeConfig.time) gameTimer = setInterval(updateTimer, 1000);
     
-    if (modeConfig.time) {
-        gameTimer = setInterval(updateTimer, 1000);
-    }
-    
-    updateDisplay();
     createBoard();
-    renderBoard(true); // Full render for initial board
+    renderBoard();
+    updateDisplay();
     
     // Ensure no initial matches
     while (checkMatches().length > 0) {
         createBoard();
+        renderBoard();
     }
     
     startModal.classList.remove('active');
@@ -226,12 +176,8 @@ function initGame(mode = 'classic') {
 function updateTimer() {
     timeLeft--;
     movesDisplay.textContent = timeLeft + 's';
-    
-    if (timeLeft <= 0) {
-        endGame();
-    } else if (timeLeft <= 10) {
-        movesDisplay.parentElement.style.color = '#ff6b6b';
-    }
+    if (timeLeft <= 0) endGame();
+    else if (timeLeft <= 10) movesDisplay.parentElement.style.color = '#ff6b6b';
 }
 
 // ========== BOARD MANAGEMENT ==========
@@ -248,58 +194,12 @@ function createBoard() {
     }
 }
 
-function renderBoard(fullRender = false) {
-    if (fullRender) {
-        // Only do full render on initial load or shuffle
-        gameBoard.innerHTML = '';
-        
-        for (let row = 0; row < BOARD_SIZE; row++) {
-            for (let col = 0; col < BOARD_SIZE; col++) {
-                const gem = createGemElement(row, col);
-                gameBoard.appendChild(gem);
-            }
-        }
-    } else {
-        // Smart update: only update changed gems
-        for (let row = 0; row < BOARD_SIZE; row++) {
-            for (let col = 0; col < BOARD_SIZE; col++) {
-                const existingGem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-                const gemData = board[row][col];
-                
-                if (existingGem && gemData.type !== -1) {
-                    const currentType = parseInt(existingGem.dataset.type);
-                    const hasSpecialClass = existingGem.classList.contains('special-striped') || 
-                                          existingGem.classList.contains('special-wrapped') || 
-                                          existingGem.classList.contains('special-bomb');
-                    
-                    // Only update if gem type changed or special status changed
-                    if (currentType !== gemData.type || 
-                        (hasSpecialClass && !gemData.special) || 
-                        (!hasSpecialClass && gemData.special)) {
-                        
-                        existingGem.dataset.type = gemData.type;
-                        existingGem.textContent = GEM_SYMBOLS[gemData.type];
-                        
-                        // Remove animations
-                        existingGem.classList.remove('special-striped', 'special-wrapped', 'special-bomb', 'fade-out', 'matching');
-                        
-                        if (gemData.special === 'striped') {
-                            existingGem.classList.add('special-striped');
-                            existingGem.textContent = '⚡' + GEM_SYMBOLS[gemData.type];
-                        } else if (gemData.special === 'wrapped') {
-                            existingGem.classList.add('special-wrapped');
-                            existingGem.textContent = '🎁';
-                        } else if (gemData.special === 'bomb') {
-                            existingGem.classList.add('special-bomb');
-                            existingGem.textContent = '💣';
-                        }
-                    }
-                } else if (!existingGem && gemData.type !== -1) {
-                    // Gem doesn't exist but should - create it
-                    const newGem = createGemElement(row, col);
-                    gameBoard.appendChild(newGem);
-                }
-            }
+function renderBoard() {
+    gameBoard.innerHTML = '';
+    for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+            const gem = createGemElement(row, col);
+            gameBoard.appendChild(gem);
         }
     }
 }
@@ -325,10 +225,7 @@ function createGemElement(row, col) {
     }
     
     gem.addEventListener('click', () => handleGemClick(row, col));
-    gem.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        handleGemClick(row, col);
-    });
+    gem.addEventListener('touchstart', (e) => { e.preventDefault(); handleGemClick(row, col); });
     
     return gem;
 }
@@ -360,9 +257,7 @@ function handleGemClick(row, col) {
 
 function highlightGem(row, col, highlight) {
     const gem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-    if (gem) {
-        gem.classList.toggle('selected', highlight);
-    }
+    if (gem) gem.classList.toggle('selected', highlight);
 }
 
 function areAdjacent(gem1, gem2) {
@@ -374,11 +269,15 @@ function areAdjacent(gem1, gem2) {
 async function swapGems(gem1, gem2) {
     isProcessing = true;
     
+    // Swap gems in board
     const temp = board[gem1.row][gem1.col];
     board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
     board[gem2.row][gem2.col] = temp;
     
-    renderBoard(); // Smart update
+    // Update visually
+    updateGem(gem1.row, gem1.col);
+    updateGem(gem2.row, gem2.col);
+    
     await wait(200);
     
     const matches = checkMatches();
@@ -393,25 +292,44 @@ async function swapGems(gem1, gem2) {
         const temp = board[gem1.row][gem1.col];
         board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
         board[gem2.row][gem2.col] = temp;
-        renderBoard(); // Smart update
+        updateGem(gem1.row, gem1.col);
+        updateGem(gem2.row, gem2.col);
         AudioManager.invalid();
     }
     
     selectedGem = null;
     isProcessing = false;
     
-    if (gameMode === 'classic' && moves <= 0) {
-        endGame();
-    }
-    
+    if (gameMode === 'classic' && moves <= 0) endGame();
     resetHintTimeout();
+}
+
+function updateGem(row, col) {
+    const gem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+    if (!gem) return;
+    
+    const gemData = board[row][col];
+    gem.dataset.type = gemData.type;
+    gem.textContent = GEM_SYMBOLS[gemData.type];
+    gem.classList.remove('special-striped', 'special-wrapped', 'special-bomb');
+    
+    if (gemData.special === 'striped') {
+        gem.classList.add('special-striped');
+        gem.textContent = '⚡' + GEM_SYMBOLS[gemData.type];
+    } else if (gemData.special === 'wrapped') {
+        gem.classList.add('special-wrapped');
+        gem.textContent = '🎁';
+    } else if (gemData.special === 'bomb') {
+        gem.classList.add('special-bomb');
+        gem.textContent = '💣';
+    }
 }
 
 function checkMatches() {
     const matches = [];
     const matchGroups = [];
     
-    // Check horizontal matches
+    // Check horizontal
     for (let row = 0; row < BOARD_SIZE; row++) {
         for (let col = 0; col < BOARD_SIZE - 2; col++) {
             const type = board[row][col].type;
@@ -435,7 +353,7 @@ function checkMatches() {
         }
     }
     
-    // Check vertical matches
+    // Check vertical
     for (let col = 0; col < BOARD_SIZE; col++) {
         for (let row = 0; row < BOARD_SIZE - 2; row++) {
             const type = board[row][col].type;
@@ -459,7 +377,7 @@ function checkMatches() {
         }
     }
     
-    // Remove duplicates and store match groups
+    // Remove duplicates
     const uniqueMatches = matches.filter((match, index, self) =>
         index === self.findIndex(m => m.row === match.row && m.col === match.col)
     );
@@ -477,7 +395,6 @@ async function processMatches() {
         currentCombo = comboCount;
         maxCombo = Math.max(maxCombo, currentCombo);
         
-        // Show combo popup
         if (comboCount > 1) {
             showComboPopup(comboCount);
             AudioManager.combo(comboCount);
@@ -496,7 +413,7 @@ async function processMatches() {
         
         await wait(400);
         
-        // Calculate score with combo multiplier
+        // Calculate score
         const baseScore = matches.length * 10;
         const comboBonus = comboCount > 1 ? (comboCount - 1) * 5 : 0;
         score += baseScore + comboBonus;
@@ -505,7 +422,6 @@ async function processMatches() {
         // Check for special gem creation
         matches.matchGroups.forEach(group => {
             if (group.length === 4) {
-                // Create striped gem
                 const middleMatch = group.matches[Math.floor(group.length / 2)];
                 board[middleMatch.row][middleMatch.col] = {
                     type: board[middleMatch.row][middleMatch.col].type,
@@ -515,7 +431,6 @@ async function processMatches() {
                 specialGemsCreated++;
                 AudioManager.special();
             } else if (group.length >= 5) {
-                // Create color bomb
                 const middleMatch = group.matches[Math.floor(group.length / 2)];
                 board[middleMatch.row][middleMatch.col] = {
                     type: board[middleMatch.row][middleMatch.col].type,
@@ -535,18 +450,7 @@ async function processMatches() {
         updateDisplay();
         checkAchievements();
         
-        // Fade out matched gems first (visual feedback)
-        matches.forEach(match => {
-            const gem = document.querySelector(`[data-row="${match.row}"][data-col="${match.col}"]`);
-            if (gem && board[match.row][match.col].special !== 'striped' && 
-                board[match.row][match.col].special !== 'bomb') {
-                gem.classList.add('fade-out');
-            }
-        });
-        
-        await wait(300); // Wait for fade out
-        
-        // Remove matched gems from board data (except those that became special)
+        // Remove matched gems (except special)
         matches.forEach(match => {
             if (board[match.row][match.col].special !== 'striped' && 
                 board[match.row][match.col].special !== 'bomb') {
@@ -554,44 +458,18 @@ async function processMatches() {
             }
         });
         
-        // Remove faded gems from DOM
-        document.querySelectorAll('.fade-out').forEach(gem => gem.remove());
-        
-        // Drop existing gems and track their movement
-        const droppedPositions = dropGemsWithTracking();
-        
-        // Fill empty spaces with new gems
+        // Drop and fill
+        dropGems();
         fillBoard();
-        
-        // Update the display with new positions
         renderBoard();
         
-        await wait(50);
+        await wait(100);
         
-        // Animate dropped gems (existing gems moving down)
-        droppedPositions.forEach(pos => {
-            const gem = document.querySelector(`[data-row="${pos.newRow}"][data-col="${pos.col}"]`);
-            if (gem) {
-                gem.classList.add('dropping');
-                setTimeout(() => gem.classList.remove('dropping'), 300);
-            }
+        // Add animations to new gems
+        document.querySelectorAll('.gem').forEach(gem => {
+            gem.classList.add('falling');
+            setTimeout(() => gem.classList.remove('falling'), 500);
         });
-        
-        // Animate new falling gems (gems that were just created)
-        for (let col = 0; col < BOARD_SIZE; col++) {
-            for (let row = 0; row < BOARD_SIZE; row++) {
-                const gem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-                if (gem && !gem.classList.contains('dropping')) {
-                    // This is a newly created gem (not a dropped one)
-                    const isDropped = droppedPositions.some(p => p.newRow === row && p.col === col);
-                    if (!isDropped && !gem.classList.contains('special-striped') && 
-                        !gem.classList.contains('special-bomb')) {
-                        gem.classList.add('falling');
-                        setTimeout(() => gem.classList.remove('falling'), 500);
-                    }
-                }
-            }
-        }
         
         await wait(500);
         
@@ -601,10 +479,7 @@ async function processMatches() {
     currentCombo = 0;
     updateDisplay();
     
-    // Check if no more moves available
-    if (gameMode === 'classic' && !hasAvailableMove()) {
-        shuffleBoard();
-    }
+    if (gameMode === 'classic' && !hasAvailableMove()) shuffleBoard();
 }
 
 function dropGems() {
@@ -621,27 +496,6 @@ function dropGems() {
             }
         }
     }
-}
-
-function dropGemsWithTracking() {
-    const droppedPositions = [];
-    
-    for (let col = 0; col < BOARD_SIZE; col++) {
-        let emptyRow = BOARD_SIZE - 1;
-        
-        for (let row = BOARD_SIZE - 1; row >= 0; row--) {
-            if (board[row][col].type !== -1) {
-                if (row !== emptyRow) {
-                    board[emptyRow][col] = board[row][col];
-                    board[row][col] = { type: -1, special: null };
-                    droppedPositions.push({ oldRow: row, newRow: emptyRow, col });
-                }
-                emptyRow--;
-            }
-        }
-    }
-    
-    return droppedPositions;
 }
 
 function fillBoard() {
@@ -662,7 +516,6 @@ function showComboPopup(combo) {
     popup.className = 'combo-display';
     popup.textContent = `${combo}x COMBO!`;
     document.body.appendChild(popup);
-    
     setTimeout(() => popup.remove(), 1000);
 }
 
@@ -670,7 +523,6 @@ function showComboPopup(combo) {
 function resetHintTimeout() {
     if (hintTimeout) clearTimeout(hintTimeout);
     document.querySelectorAll('.hint-glow').forEach(el => el.classList.remove('hint-glow'));
-    
     hintTimeout = setTimeout(showHint, 5000);
 }
 
@@ -683,7 +535,6 @@ function showHint() {
         if (gem1 && gem2) {
             gem1.classList.add('hint-glow');
             gem2.classList.add('hint-glow');
-            
             setTimeout(() => {
                 gem1.classList.remove('hint-glow');
                 gem2.classList.remove('hint-glow');
@@ -695,13 +546,11 @@ function showHint() {
 function findAvailableMove() {
     for (let row = 0; row < BOARD_SIZE; row++) {
         for (let col = 0; col < BOARD_SIZE; col++) {
-            // Try swapping with right neighbor
             if (col < BOARD_SIZE - 1) {
                 if (wouldCreateMatch(row, col, row, col + 1)) {
                     return { from: { row, col }, to: { row, col: col + 1 } };
                 }
             }
-            // Try swapping with bottom neighbor
             if (row < BOARD_SIZE - 1) {
                 if (wouldCreateMatch(row, col, row + 1, col)) {
                     return { from: { row, col }, to: { row: row + 1, col } };
@@ -713,14 +562,12 @@ function findAvailableMove() {
 }
 
 function wouldCreateMatch(row1, col1, row2, col2) {
-    // Temporarily swap
     const temp = board[row1][col1];
     board[row1][col1] = board[row2][col2];
     board[row2][col2] = temp;
     
     const hasMatch = checkMatches().length > 0;
     
-    // Swap back
     board[row2][col2] = board[row1][col1];
     board[row1][col1] = temp;
     
@@ -739,7 +586,6 @@ function shuffleBoard() {
         }
     }
     
-    // Fisher-Yates shuffle
     for (let i = types.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [types[i], types[j]] = [types[j], types[i]];
@@ -752,31 +598,22 @@ function shuffleBoard() {
         }
     }
     
-    renderBoard(true); // Full render for shuffle
+    renderBoard();
 }
 
 // ========== UI UPDATES ==========
 function updateDisplay() {
     scoreDisplay.textContent = score;
-    
-    if (gameMode === 'timed') {
-        movesDisplay.textContent = timeLeft + 's';
-    } else {
-        movesDisplay.textContent = moves;
-    }
-    
+    movesDisplay.textContent = gameMode === 'timed' ? timeLeft + 's' : moves;
     comboDisplay.textContent = currentCombo > 0 ? currentCombo + 'x' : '0x';
 }
 
 function endGame() {
     if (gameTimer) clearInterval(gameTimer);
     
-    // Update high score
     const highScoreKey = `highScore_${gameMode}`;
     const currentHigh = parseInt(localStorage.getItem(highScoreKey)) || 0;
-    if (score > currentHigh) {
-        localStorage.setItem(highScoreKey, score);
-    }
+    if (score > currentHigh) localStorage.setItem(highScoreKey, score);
     
     document.getElementById('gameover-title').textContent = 
         score > currentHigh ? '🎉 NEW HIGH SCORE! 🎉' : 'Game Over!';
@@ -788,9 +625,7 @@ function endGame() {
     
     gameoverModal.classList.add('active');
     
-    if (score > currentHigh) {
-        AudioManager.success();
-    }
+    if (score > currentHigh) AudioManager.success();
 }
 
 function wait(ms) {
@@ -804,12 +639,7 @@ newGameBtn.addEventListener('click', () => {
 });
 
 hintBtn.addEventListener('click', showHint);
-
-shuffleBtn.addEventListener('click', () => {
-    if (!isProcessing) {
-        shuffleBoard();
-    }
-});
+shuffleBtn.addEventListener('click', () => { if (!isProcessing) shuffleBoard(); });
 
 document.getElementById('play-again').addEventListener('click', () => {
     gameoverModal.classList.remove('active');
