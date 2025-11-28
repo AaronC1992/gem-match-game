@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gem Match - Match 3 Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            touch-action: none;
+            overflow: hidden;
+        }
+
+        .game-container {
+            text-align: center;
+            padding: 20px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: white;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .score-board {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+
+        .score-item {
+            color: white;
+            font-size: 1.2em;
+        }
+
+        .score-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            display: block;
+            color: #ffd700;
+        }
+
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 15px;
+            margin: 0 auto;
+            max-width: 500px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        .gem {
+            aspect-ratio: 1;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            user-select: none;
+        }
+
+        .gem:active {
+            transform: scale(0.95);
+        }
+
+        .gem.selected {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+        }
+
+        .gem.matching {
+            animation: pulse 0.5s ease;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        .gem.falling {
+            animation: fall 0.3s ease-out;
+        }
+
+        @keyframes fall {
+            from { transform: translateY(-100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* Gem colors */
+        .gem[data-type="0"] { background: linear-gradient(135deg, #ff6b6b, #ee5a6f); } /* Red */
+        .gem[data-type="1"] { background: linear-gradient(135deg, #4ecdc4, #44a08d); } /* Cyan */
+        .gem[data-type="2"] { background: linear-gradient(135deg, #ffd93d, #f9ca24); } /* Yellow */
+        .gem[data-type="3"] { background: linear-gradient(135deg, #6c5ce7, #a29bfe); } /* Purple */
+        .gem[data-type="4"] { background: linear-gradient(135deg, #55efc4, #00b894); } /* Green */
+        .gem[data-type="5"] { background: linear-gradient(135deg, #fd79a8, #e84393); } /* Pink */
+
+        .btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            border-radius: 25px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s ease;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 2em; }
+            .score-item { font-size: 1em; }
+            .score-value { font-size: 1.5em; }
+            .gem { font-size: 1.5em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>💎 Gem Match 💎</h1>
+        
+        <div class="score-board">
+            <div class="score-item">
+                Score
+                <span class="score-value" id="score">0</span>
+            </div>
+            <div class="score-item">
+                Moves
+                <span class="score-value" id="moves">30</span>
+            </div>
+        </div>
+
+        <div id="game-board"></div>
+        
+        <button class="btn" id="new-game">New Game</button>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
