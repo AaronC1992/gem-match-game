@@ -212,7 +212,7 @@ function initGame(mode = 'classic') {
     
     updateDisplay();
     createBoard();
-    renderBoard();
+    renderBoard(true); // Full render for initial board
     
     // Ensure no initial matches
     while (checkMatches().length > 0) {
@@ -248,13 +248,54 @@ function createBoard() {
     }
 }
 
-function renderBoard() {
-    gameBoard.innerHTML = '';
-    
-    for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
-            const gem = createGemElement(row, col);
-            gameBoard.appendChild(gem);
+function renderBoard(fullRender = false) {
+    if (fullRender) {
+        // Only do full render on initial load or shuffle
+        gameBoard.innerHTML = '';
+        
+        for (let row = 0; row < BOARD_SIZE; row++) {
+            for (let col = 0; col < BOARD_SIZE; col++) {
+                const gem = createGemElement(row, col);
+                gameBoard.appendChild(gem);
+            }
+        }
+    } else {
+        // Smart update: only update changed gems
+        for (let row = 0; row < BOARD_SIZE; row++) {
+            for (let col = 0; col < BOARD_SIZE; col++) {
+                const existingGem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                const gemData = board[row][col];
+                
+                if (existingGem) {
+                    const currentType = parseInt(existingGem.dataset.type);
+                    const hasSpecialClass = existingGem.classList.contains('special-striped') || 
+                                          existingGem.classList.contains('special-wrapped') || 
+                                          existingGem.classList.contains('special-bomb');
+                    
+                    // Only update if gem type changed or special status changed
+                    if (currentType !== gemData.type || 
+                        (hasSpecialClass && !gemData.special) || 
+                        (!hasSpecialClass && gemData.special)) {
+                        
+                        existingGem.dataset.type = gemData.type;
+                        existingGem.textContent = GEM_SYMBOLS[gemData.type];
+                        
+                        // Update special gem styling
+                        existingGem.classList.remove('special-striped', 'special-wrapped', 'special-bomb');
+                        
+                        if (gemData.special === 'striped') {
+                            existingGem.classList.add('special-striped');
+                            existingGem.textContent = '⚡' + GEM_SYMBOLS[gemData.type];
+                        } else if (gemData.special === 'wrapped') {
+                            existingGem.classList.add('special-wrapped');
+                            existingGem.textContent = '🎁';
+                        } else if (gemData.special === 'bomb') {
+                            existingGem.classList.add('special-bomb');
+                            existingGem.textContent = '💣';
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -333,7 +374,7 @@ async function swapGems(gem1, gem2) {
     board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
     board[gem2.row][gem2.col] = temp;
     
-    renderBoard();
+    renderBoard(); // Smart update
     await wait(200);
     
     const matches = checkMatches();
@@ -348,7 +389,7 @@ async function swapGems(gem1, gem2) {
         const temp = board[gem1.row][gem1.col];
         board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
         board[gem2.row][gem2.col] = temp;
-        renderBoard();
+        renderBoard(); // Smart update
         AudioManager.invalid();
     }
     
@@ -500,11 +541,18 @@ async function processMatches() {
         
         dropGems();
         fillBoard();
-        renderBoard();
+        renderBoard(); // Smart update - only changes affected gems
         
+        // Add falling animation only to new/moved gems
         document.querySelectorAll('.gem').forEach(gem => {
-            if (!gem.classList.contains('special-striped') && !gem.classList.contains('special-bomb')) {
+            const row = parseInt(gem.dataset.row);
+            const wasEmpty = board[row][parseInt(gem.dataset.col)].type !== -1;
+            
+            if (!gem.classList.contains('special-striped') && 
+                !gem.classList.contains('special-bomb') && 
+                !gem.classList.contains('falling')) {
                 gem.classList.add('falling');
+                setTimeout(() => gem.classList.remove('falling'), 400);
             }
         });
         
@@ -646,7 +694,7 @@ function shuffleBoard() {
         }
     }
     
-    renderBoard();
+    renderBoard(true); // Full render for shuffle
 }
 
 // ========== UI UPDATES ==========
