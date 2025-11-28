@@ -290,16 +290,19 @@ function areAdjacent(gem1, gem2) {
 async function swapGems(gem1, gem2) {
     isProcessing = true;
     
-    // First check if this swap will create a match
-    const temp = board[gem1.row][gem1.col];
-    board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
-    board[gem2.row][gem2.col] = temp;
+    // Store original values
+    const temp1 = board[gem1.row][gem1.col];
+    const temp2 = board[gem2.row][gem2.col];
+    
+    // Temporarily swap to check for matches
+    board[gem1.row][gem1.col] = temp2;
+    board[gem2.row][gem2.col] = temp1;
     
     const willMatch = checkMatches().length > 0;
     
-    // Swap back temporarily for animation
-    board[gem2.row][gem2.col] = board[gem1.row][gem1.col];
-    board[gem1.row][gem1.col] = temp;
+    // Restore original state
+    board[gem1.row][gem1.col] = temp1;
+    board[gem2.row][gem2.col] = temp2;
     
     if (!willMatch) {
         // Invalid move - don't animate, just reject
@@ -313,8 +316,8 @@ async function swapGems(gem1, gem2) {
     animateSwap(gem1, gem2);
     
     // Do the actual swap
-    board[gem1.row][gem1.col] = board[gem2.row][gem2.col];
-    board[gem2.row][gem2.col] = temp;
+    board[gem1.row][gem1.col] = temp2;
+    board[gem2.row][gem2.col] = temp1;
     
     await wait(250);
     
@@ -637,14 +640,19 @@ function findAvailableMove() {
 }
 
 function wouldCreateMatch(row1, col1, row2, col2) {
-    const temp = board[row1][col1];
-    board[row1][col1] = board[row2][col2];
-    board[row2][col2] = temp;
+    // Store original values
+    const temp1 = board[row1][col1];
+    const temp2 = board[row2][col2];
+    
+    // Swap
+    board[row1][col1] = temp2;
+    board[row2][col2] = temp1;
     
     const hasMatch = checkMatches().length > 0;
     
-    board[row2][col2] = board[row1][col1];
-    board[row1][col1] = temp;
+    // Restore
+    board[row1][col1] = temp1;
+    board[row2][col2] = temp2;
     
     return hasMatch;
 }
