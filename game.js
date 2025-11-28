@@ -266,7 +266,7 @@ function renderBoard(fullRender = false) {
                 const existingGem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
                 const gemData = board[row][col];
                 
-                if (existingGem) {
+                if (existingGem && gemData.type !== -1) {
                     const currentType = parseInt(existingGem.dataset.type);
                     const hasSpecialClass = existingGem.classList.contains('special-striped') || 
                                           existingGem.classList.contains('special-wrapped') || 
@@ -280,8 +280,8 @@ function renderBoard(fullRender = false) {
                         existingGem.dataset.type = gemData.type;
                         existingGem.textContent = GEM_SYMBOLS[gemData.type];
                         
-                        // Update special gem styling
-                        existingGem.classList.remove('special-striped', 'special-wrapped', 'special-bomb');
+                        // Remove animations
+                        existingGem.classList.remove('special-striped', 'special-wrapped', 'special-bomb', 'fade-out', 'matching');
                         
                         if (gemData.special === 'striped') {
                             existingGem.classList.add('special-striped');
@@ -294,6 +294,10 @@ function renderBoard(fullRender = false) {
                             existingGem.textContent = '💣';
                         }
                     }
+                } else if (!existingGem && gemData.type !== -1) {
+                    // Gem doesn't exist but should - create it
+                    const newGem = createGemElement(row, col);
+                    gameBoard.appendChild(newGem);
                 }
             }
         }
@@ -542,7 +546,7 @@ async function processMatches() {
         
         await wait(300); // Wait for fade out
         
-        // Remove matched gems (except those that became special)
+        // Remove matched gems from board data (except those that became special)
         matches.forEach(match => {
             if (board[match.row][match.col].special !== 'striped' && 
                 board[match.row][match.col].special !== 'bomb') {
@@ -550,14 +554,21 @@ async function processMatches() {
             }
         });
         
-        // Drop existing gems with smooth animation
+        // Remove faded gems from DOM
+        document.querySelectorAll('.fade-out').forEach(gem => gem.remove());
+        
+        // Drop existing gems and track their movement
         const droppedPositions = dropGemsWithTracking();
+        
+        // Fill empty spaces with new gems
         fillBoard();
-        renderBoard(); // Update board
+        
+        // Update the display with new positions
+        renderBoard();
         
         await wait(50);
         
-        // Animate dropped gems
+        // Animate dropped gems (existing gems moving down)
         droppedPositions.forEach(pos => {
             const gem = document.querySelector(`[data-row="${pos.newRow}"][data-col="${pos.col}"]`);
             if (gem) {
@@ -566,16 +577,15 @@ async function processMatches() {
             }
         });
         
-        // Animate new falling gems
+        // Animate new falling gems (gems that were just created)
         for (let col = 0; col < BOARD_SIZE; col++) {
             for (let row = 0; row < BOARD_SIZE; row++) {
                 const gem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-                if (gem && !gem.classList.contains('dropping') && 
-                    !gem.classList.contains('special-striped') && 
-                    !gem.classList.contains('special-bomb')) {
-                    // Check if this is a new gem (was empty before)
-                    const wasNew = droppedPositions.every(p => !(p.newRow === row && p.col === col));
-                    if (wasNew) {
+                if (gem && !gem.classList.contains('dropping')) {
+                    // This is a newly created gem (not a dropped one)
+                    const isDropped = droppedPositions.some(p => p.newRow === row && p.col === col);
+                    if (!isDropped && !gem.classList.contains('special-striped') && 
+                        !gem.classList.contains('special-bomb')) {
                         gem.classList.add('falling');
                         setTimeout(() => gem.classList.remove('falling'), 500);
                     }
