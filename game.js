@@ -212,6 +212,9 @@ function createGemElement(row, col) {
     gem.dataset.col = col;
     gem.dataset.type = gemData.type;
     gem.textContent = GEM_SYMBOLS[gemData.type];
+    // Ensure gem is placed in the correct grid cell regardless of DOM order
+    gem.style.gridRowStart = (row + 1).toString();
+    gem.style.gridColumnStart = (col + 1).toString();
     
     if (gemData.special === 'striped') {
         gem.classList.add('special-striped');
@@ -346,6 +349,9 @@ function updateGem(row, col) {
     gem.dataset.type = gemData.type;
     gem.textContent = GEM_SYMBOLS[gemData.type];
     gem.classList.remove('special-striped', 'special-wrapped', 'special-bomb');
+    // Keep CSS grid position in sync
+    gem.style.gridRowStart = (row + 1).toString();
+    gem.style.gridColumnStart = (col + 1).toString();
     
     if (gemData.special === 'striped') {
         gem.classList.add('special-striped');
@@ -514,79 +520,36 @@ async function processMatches() {
 }
 
 async function animateGemDrop() {
-    // First, calculate new positions for all gems
-    const moves = [];
-    const newGems = [];
-    
+    // Re-compute board by applying gravity
     for (let col = 0; col < BOARD_SIZE; col++) {
-        const columnGems = [];
-        
-        // Collect non-empty gems from bottom to top
+        let writeRow = BOARD_SIZE - 1;
         for (let row = BOARD_SIZE - 1; row >= 0; row--) {
             if (board[row][col].type !== -1) {
-                columnGems.push({ row, data: board[row][col] });
+                const cell = board[row][col];
+                board[writeRow][col] = cell;
+                if (writeRow !== row) {
+                    board[row][col] = { type: -1, special: null };
+                }
+                writeRow--;
             }
         }
-        
-        // Clear the column
-        for (let row = 0; row < BOARD_SIZE; row++) {
-            board[row][col] = { type: -1, special: null };
-        }
-        
-        // Place existing gems at bottom and track moves
-        let targetRow = BOARD_SIZE - 1;
-        for (const gem of columnGems) {
-            board[targetRow][col] = gem.data;
-            if (gem.row !== targetRow) {
-                moves.push({ oldRow: gem.row, newRow: targetRow, col });
-            }
-            targetRow--;
-        }
-        
-        // Fill top with new gems
-        const emptyCount = targetRow + 1;
-        for (let i = 0; i < emptyCount; i++) {
-            board[i][col] = {
+        // Fill remaining with new gems
+        for (let row = writeRow; row >= 0; row--) {
+            board[row][col] = {
                 type: Math.floor(Math.random() * GEM_TYPES),
                 special: null
             };
-            newGems.push({ row: i, col });
         }
     }
-    
-    // Animate existing gems dropping
-    moves.forEach(move => {
-        const el = document.querySelector(`[data-row="${move.oldRow}"][data-col="${move.col}"]`);
-        if (el) {
-            const distance = (move.newRow - move.oldRow) * 100;
-            el.dataset.row = move.newRow;
-            el.style.transition = 'transform 0.3s ease-out';
-            el.style.transform = `translateY(${distance}%)`;
-            setTimeout(() => {
-                el.style.transition = '';
-                el.style.transform = '';
-            }, 300);
-        }
+
+    // Re-render board in correct grid positions
+    renderBoard();
+
+    // Add simple drop animation to all gems for a clean effect
+    document.querySelectorAll('#game-board .gem').forEach(el => {
+        el.classList.add('dropping');
+        setTimeout(() => el.classList.remove('dropping'), 300);
     });
-    
-    // Add new gems with simple drop animation
-    newGems.forEach((gem, index) => {
-        const el = createGemElement(gem.row, gem.col);
-        gameBoard.appendChild(el);
-        el.style.transform = 'translateY(-100%)';
-        el.style.opacity = '0.5';
-        
-        setTimeout(() => {
-            el.style.transition = 'transform 0.4s ease-out, opacity 0.3s';
-            el.style.transform = 'translateY(0)';
-            el.style.opacity = '1';
-            setTimeout(() => {
-                el.style.transition = '';
-            }, 400);
-        }, 50);
-    });
-    
-    await wait(450);
 }
 
 function showComboPopup(combo) {
