@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gem Cascade - Ultimate Match 3</title>
     <style>
         * {
@@ -137,12 +137,46 @@
         }
 
         .gem.falling {
-            animation: fall 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation: fall 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         @keyframes fall {
-            from { transform: translateY(-150px) rotate(-180deg); opacity: 0; }
-            to { transform: translateY(0) rotate(0deg); opacity: 1; }
+            from { 
+                transform: translateY(-100%) rotate(-180deg); 
+                opacity: 0.3; 
+            }
+            to { 
+                transform: translateY(0) rotate(0deg); 
+                opacity: 1; 
+            }
+        }
+        
+        .gem.dropping {
+            animation: drop 0.3s ease-out;
+        }
+        
+        @keyframes drop {
+            from {
+                transform: translateY(-50px);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+        
+        .gem.fade-out {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+        
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.5);
+            }
         }
 
         .gem.special-striped::before {
@@ -315,6 +349,7 @@
             z-index: 3000;
             transition: right 0.5s ease;
             max-width: 300px;
+            will-change: right;
         }
 
         .achievement-popup.show {

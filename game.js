@@ -531,6 +531,17 @@ async function processMatches() {
         updateDisplay();
         checkAchievements();
         
+        // Fade out matched gems first (visual feedback)
+        matches.forEach(match => {
+            const gem = document.querySelector(`[data-row="${match.row}"][data-col="${match.col}"]`);
+            if (gem && board[match.row][match.col].special !== 'striped' && 
+                board[match.row][match.col].special !== 'bomb') {
+                gem.classList.add('fade-out');
+            }
+        });
+        
+        await wait(300); // Wait for fade out
+        
         // Remove matched gems (except those that became special)
         matches.forEach(match => {
             if (board[match.row][match.col].special !== 'striped' && 
@@ -539,25 +550,40 @@ async function processMatches() {
             }
         });
         
-        dropGems();
+        // Drop existing gems with smooth animation
+        const droppedPositions = dropGemsWithTracking();
         fillBoard();
+        renderBoard(); // Update board
         
-        // Smooth update with minimal visual disruption
-        await wait(50); // Brief pause before update
-        renderBoard(); // Smart update - only changes affected gems
+        await wait(50);
         
-        // Add falling animation only to new/moved gems
-        await wait(20); // Let DOM update
-        document.querySelectorAll('.gem').forEach(gem => {
-            if (!gem.classList.contains('special-striped') && 
-                !gem.classList.contains('special-bomb') && 
-                !gem.classList.contains('falling')) {
-                gem.classList.add('falling');
-                setTimeout(() => gem.classList.remove('falling'), 400);
+        // Animate dropped gems
+        droppedPositions.forEach(pos => {
+            const gem = document.querySelector(`[data-row="${pos.newRow}"][data-col="${pos.col}"]`);
+            if (gem) {
+                gem.classList.add('dropping');
+                setTimeout(() => gem.classList.remove('dropping'), 300);
             }
         });
         
-        await wait(380);
+        // Animate new falling gems
+        for (let col = 0; col < BOARD_SIZE; col++) {
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                const gem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                if (gem && !gem.classList.contains('dropping') && 
+                    !gem.classList.contains('special-striped') && 
+                    !gem.classList.contains('special-bomb')) {
+                    // Check if this is a new gem (was empty before)
+                    const wasNew = droppedPositions.every(p => !(p.newRow === row && p.col === col));
+                    if (wasNew) {
+                        gem.classList.add('falling');
+                        setTimeout(() => gem.classList.remove('falling'), 500);
+                    }
+                }
+            }
+        }
+        
+        await wait(500);
         
         matches = checkMatches();
     }
@@ -585,6 +611,27 @@ function dropGems() {
             }
         }
     }
+}
+
+function dropGemsWithTracking() {
+    const droppedPositions = [];
+    
+    for (let col = 0; col < BOARD_SIZE; col++) {
+        let emptyRow = BOARD_SIZE - 1;
+        
+        for (let row = BOARD_SIZE - 1; row >= 0; row--) {
+            if (board[row][col].type !== -1) {
+                if (row !== emptyRow) {
+                    board[emptyRow][col] = board[row][col];
+                    board[row][col] = { type: -1, special: null };
+                    droppedPositions.push({ oldRow: row, newRow: emptyRow, col });
+                }
+                emptyRow--;
+            }
+        }
+    }
+    
+    return droppedPositions;
 }
 
 function fillBoard() {
