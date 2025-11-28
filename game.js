@@ -448,6 +448,9 @@ async function processMatches() {
                 const rect = gem.getBoundingClientRect();
                 const color = window.getComputedStyle(gem).background;
                 createParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, color.split('(')[0], 6);
+                // Stagger fade-out by row for nicer cascade
+                const delay = (BOARD_SIZE - match.row) * 0.03; // seconds
+                gem.style.setProperty('--delay', `${delay}s`);
             }
         });
         
@@ -505,7 +508,10 @@ async function processMatches() {
         await wait(300);
         
         // Remove faded gems from DOM
-        document.querySelectorAll('.fade-out').forEach(gem => gem.remove());
+        document.querySelectorAll('.fade-out').forEach(gem => {
+            // Clear any transform after animation ends
+            setTimeout(() => gem.remove(), 40);
+        });
         
         // Drop and fill with physics animation
         await animateGemDrop();
@@ -545,10 +551,19 @@ async function animateGemDrop() {
     // Re-render board in correct grid positions
     renderBoard();
 
-    // Add simple drop animation to all gems for a clean effect
+    // Add staggered drop animation to simulate cascade
     document.querySelectorAll('#game-board .gem').forEach(el => {
+        const row = parseInt(el.dataset.row, 10);
+        const delay = row * 0.025; // seconds
+        const duration = 0.3 + row * 0.015; // seconds
+        el.style.setProperty('--delay', `${delay}s`);
+        el.style.setProperty('--duration', `${duration}s`);
         el.classList.add('dropping');
-        setTimeout(() => el.classList.remove('dropping'), 300);
+        setTimeout(() => {
+            el.classList.remove('dropping');
+            el.style.removeProperty('--delay');
+            el.style.removeProperty('--duration');
+        }, (duration + delay) * 1000 + 50);
     });
 }
 

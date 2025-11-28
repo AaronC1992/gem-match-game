@@ -170,30 +170,46 @@
         }
         
         .gem.dropping {
-            animation: drop 0.3s ease-out;
+            animation: dropSoft var(--duration, 0.35s) var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) var(--delay, 0s);
         }
         
-        @keyframes drop {
-            from {
-                transform: translateY(-50px);
+        @keyframes dropSoft {
+            0% {
+                transform: translateY(-18px);
+                opacity: 0.6;
+                filter: brightness(0.95);
             }
-            to {
+            60% {
+                transform: translateY(3px);
+                opacity: 1;
+                filter: brightness(1.05);
+            }
+            100% {
                 transform: translateY(0);
+                opacity: 1;
+                filter: brightness(1);
             }
         }
         
         .gem.fade-out {
-            animation: fadeOut 0.3s ease-out forwards;
+            animation: popOut 0.28s ease-out var(--delay, 0s) forwards;
         }
         
-        @keyframes fadeOut {
-            from {
-                opacity: 1;
+        @keyframes popOut {
+            0% {
                 transform: scale(1);
+                opacity: 1;
+                filter: saturate(1);
             }
-            to {
+            40% {
+                transform: scale(1.12) rotate(2deg);
+                opacity: 1;
+                filter: saturate(1.2);
+            }
+            100% {
+                transform: scale(0.7);
                 opacity: 0;
-                transform: scale(0.5);
+                filter: saturate(0.8);
             }
         }
 
