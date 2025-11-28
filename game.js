@@ -742,3 +742,39 @@ document.addEventListener('keydown', (e) => {
         soundEnabled = !soundEnabled;
     }
 });
+
+// ========== RESPONSIVE BOARD RESIZE ==========
+function resizeLayout() {
+    const root = document.documentElement;
+    const container = document.querySelector('.game-container');
+    const boardEl = document.getElementById('game-board');
+    if (!container || !boardEl) return;
+
+    // Measure chrome heights
+    const header = container.querySelector('h1');
+    const scoreBoard = container.querySelector('.score-board');
+    const controls = container.querySelector('.controls');
+
+    const headerH = header ? header.offsetHeight : 0;
+    const scoreH = scoreBoard ? scoreBoard.offsetHeight : 0;
+    const controlsH = controls ? controls.offsetHeight : 0;
+    const verticalPadding = parseFloat(getComputedStyle(container).paddingTop) + parseFloat(getComputedStyle(container).paddingBottom);
+    const gapEstimate = parseFloat(getComputedStyle(container).gap) || 16;
+
+    const availableHeight = window.innerHeight - (headerH + scoreH + controlsH + verticalPadding + gapEstimate * 2) - 10; // extra breathing space
+    const availableWidth = container.clientWidth - (parseFloat(getComputedStyle(container).paddingLeft) + parseFloat(getComputedStyle(container).paddingRight));
+
+    let target = Math.min(availableHeight, availableWidth);
+    // Safeguards for extremely small screens
+    if (target < 220) target = Math.min(availableWidth, 220);
+    if (target > 760) target = Math.min(target, 760);
+
+    root.style.setProperty('--board-size', target + 'px');
+}
+
+window.addEventListener('resize', () => { resizeLayout(); });
+window.addEventListener('orientationchange', () => { setTimeout(resizeLayout, 120); });
+window.addEventListener('load', () => { resizeLayout(); });
+
+// Call after initial board render in case load event missed timing
+setTimeout(resizeLayout, 200);
