@@ -721,3 +721,8 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
 
 // ========== INITIALIZE ==========
 AudioManager.init();
+
+// Prevent zoom via ctrl+wheel and iOS gesture
+document.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); } }, { passive: false });
+document.addEventListener('gesturestart', (e) => { e.preventDefault(); });
+document.querySelector('#game-board')?.addEventListener('dblclick', (e) => { e.preventDefault(); });
