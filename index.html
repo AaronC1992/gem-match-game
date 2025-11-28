@@ -20,39 +20,35 @@
             animation: gradientShift 15s ease infinite;
             display: flex;
             justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            touch-action: none;
-            overflow: hidden;
+                .mode-btn:hover {
+                    background: rgba(255,255,255,0.5);
+                    filter: brightness(1.05);
+                }
             position: relative;
         }
         
         @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .game-container {
-            text-align: center;
-            padding: 20px;
-            max-width: 600px;
-            width: 100%;
-            position: relative;
-            z-index: 1;
-        }
-
+                @keyframes fall {
+                    from { 
+                        transform: translateY(-100%);
+                        opacity: 0.3; 
+                    }
+                    to { 
+                        transform: translateY(0);
+                        opacity: 1; 
+                    }
+                }
         h1 {
             color: white;
             font-size: 2.8em;
             margin-bottom: 10px;
             text-shadow: 3px 3px 6px rgba(0,0,0,0.4);
             font-weight: bold;
-            letter-spacing: 2px;
-        }
-
-        .score-board {
-            background: rgba(255, 255, 255, 0.2);
+                @keyframes matchPulse {
+                    0%, 100% { transform: scale(1); }
+                    25% { transform: scale(1.04); }
+                    75% { transform: scale(1.04); }
+                }
             backdrop-filter: blur(10px);
             padding: 15px;
             border-radius: 15px;
@@ -65,6 +61,8 @@
 
         .score-item {
             color: white;
+                    transform: translateZ(0);
+                    contain: layout paint;
             font-size: 1em;
         }
 
