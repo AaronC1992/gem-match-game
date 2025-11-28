@@ -7,6 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        :root { --board-max: min(92vw, calc(92vh - 240px)); --gap-size: clamp(3px, 0.9vw, 7px); }
 
         body {
             font-family: 'Segoe UI', 'Arial', sans-serif;
@@ -31,17 +32,7 @@
         h1 { color: white; font-size: 2.8em; margin-bottom: 10px; text-shadow: 3px 3px 6px rgba(0,0,0,0.4); font-weight: bold; letter-spacing: 2px; }
 
         /* Main game wrapper (was missing after CSS cleanup) */
-        .game-container {
-            width: 100%;
-            max-width: 560px;
-            padding: 20px 25px 35px;
-            background: rgba(255,255,255,0.15);
-            backdrop-filter: blur(12px);
-            border-radius: 25px;
-            box-shadow: 0 12px 40px rgba(0,0,0,0.35);
-            position: relative;
-            text-align: center;
-        }
+        .game-container { width: 100%; max-width: 640px; padding: clamp(16px,3.5vw,30px) clamp(18px,4vw,38px) clamp(26px,5vw,44px); background: rgba(255,255,255,0.16); backdrop-filter: blur(14px); border-radius: clamp(18px,3.2vw,32px); box-shadow: 0 12px 44px rgba(0,0,0,0.35); position: relative; text-align: center; }
         .game-container > div:last-child { margin-top: 18px; }
         .game-container button { min-width: 120px; }
 
@@ -72,9 +63,9 @@
         .combo-display { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4em; font-weight: bold; color: #ffd700; text-shadow: 0 0 20px rgba(255,215,0,0.8); pointer-events: none; z-index: 1000; animation: comboPopup 1s ease-out forwards; }
         @keyframes comboPopup { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.85); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); } 100% { opacity: 0; transform: translate(-50%, -100%) scale(1); } }
 
-        #game-board { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 15px; margin: 0 auto; max-width: 500px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); position: relative; touch-action: manipulation; }
+        #game-board { display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: 1fr; gap: var(--gap-size); width: var(--board-max); height: var(--board-max); background: rgba(255,255,255,0.12); padding: clamp(8px,1.5vw,14px); border-radius: 18px; margin: 0 auto; box-shadow: 0 8px 32px rgba(0,0,0,0.35); position: relative; touch-action: manipulation; }
 
-        .gem { aspect-ratio: 1; border-radius: 15px; cursor: pointer; transition: transform 0.15s ease, filter 0.15s ease; display: flex; align-items: center; justify-content: center; font-size: 2.2em; box-shadow: 0 6px 20px rgba(0,0,0,0.4), inset 0 2px 8px rgba(255,255,255,0.4); user-select: none; position: relative; will-change: transform; background: linear-gradient(145deg, rgba(255,255,255,0.3), rgba(255,255,255,0.05)); border: 2px solid rgba(255,255,255,0.3); }
+        .gem { aspect-ratio: 1; border-radius: 14px; cursor: pointer; transition: transform 0.15s ease, filter 0.15s ease; display: flex; align-items: center; justify-content: center; font-size: clamp(1.4rem, calc(var(--board-max)/12), 2.3rem); box-shadow: 0 6px 18px rgba(0,0,0,0.42), inset 0 2px 6px rgba(255,255,255,0.35); user-select: none; position: relative; will-change: transform; background: linear-gradient(145deg, rgba(255,255,255,0.32), rgba(255,255,255,0.07)); border: 2px solid rgba(255,255,255,0.28); }
         .gem:active { transform: scale(0.98); }
         .gem.selected { transform: scale(1.08); box-shadow: 0 0 30px rgba(255,255,255,1), 0 0 50px rgba(255,215,0,0.6); filter: brightness(1.3); z-index: 10; }
         .gem.matching { animation: matchPulse 0.6s ease; }
@@ -132,7 +123,8 @@
         @keyframes screenShake { 0%,100% { transform: translate(0, 0); } 10%,30%,50%,70%,90% { transform: translate(-3px, 3px); } 20%,40%,60%,80% { transform: translate(3px, -3px); } }
         #game-board.shake { animation: screenShake 0.4s; }
 
-        @media (max-width: 600px) { h1 { font-size: 2em; } .score-item { font-size: 0.9em; } .score-value { font-size: 1.4em; } .gem { font-size: 1.5em; } .modal h2 { font-size: 2em; } .modal p { font-size: 1.1em; } }
+        @media (max-width: 600px) { h1 { font-size: clamp(1.6em, 6vw, 2.1em); } .score-item { font-size: 0.85em; } .score-value { font-size: 1.3em; } .modal h2 { font-size: clamp(1.6em,7vw,2.2em); } .modal p { font-size: 1em; } .game-modes { gap: 10px; } .mode-btn { padding: 14px; } }
+        @media (min-width: 1200px) { :root { --board-max: min(700px, calc(90vh - 260px)); } .game-container { max-width: 760px; } }
     </style>
 </head>
 <body>
