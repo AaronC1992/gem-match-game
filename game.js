@@ -78,14 +78,16 @@ const AudioManager = {
 
 // ========== PARTICLE EFFECTS ==========
 function createParticles(x, y, color, count = 8) {
+    // Normalize gradient/background string to a solid fallback for particles
+    const resolvedColor = (/rgb|hsl|#/.test(color)) ? color : '#ffd700';
     for (let i = 0; i < count; i++) {
         const particle = document.createElement('div');
         particle.className = 'particle';
-        particle.style.background = color;
+        particle.style.background = resolvedColor;
         particle.style.left = x + 'px';
         particle.style.top = y + 'px';
         document.body.appendChild(particle);
-        
+
         const angle = (Math.PI * 2 * i) / count;
         const velocity = 2 + Math.random() * 3;
         animateParticle(particle, Math.cos(angle) * velocity, Math.sin(angle) * velocity);
@@ -159,15 +161,15 @@ function initGame(mode = 'classic') {
     if (gameTimer) clearInterval(gameTimer);
     if (modeConfig.time) gameTimer = setInterval(updateTimer, 1000);
     
-    createBoard();
+    // Build initial board ensuring: no existing matches + at least one possible move
+    do {
+        createBoard();
+    } while (checkMatches().length > 0 || !hasAvailableMove());
     renderBoard();
     updateDisplay();
-    
-    // Ensure no initial matches
-    while (checkMatches().length > 0) {
-        createBoard();
-        renderBoard();
-    }
+
+    // Reset any danger coloring on timed/moves displays
+    movesDisplay.parentElement.style.color = '';
     
     startModal.classList.remove('active');
     resetHintTimeout();
@@ -176,8 +178,14 @@ function initGame(mode = 'classic') {
 function updateTimer() {
     timeLeft--;
     movesDisplay.textContent = timeLeft + 's';
-    if (timeLeft <= 0) endGame();
-    else if (timeLeft <= 10) movesDisplay.parentElement.style.color = '#ff6b6b';
+    if (timeLeft <= 0) {
+        endGame();
+    } else if (timeLeft <= 10) {
+        movesDisplay.parentElement.style.color = '#ff6b6b';
+    } else {
+        // Clear warning color when recovering (e.g., different mode restart)
+        movesDisplay.parentElement.style.color = '';
+    }
 }
 
 // ========== BOARD MANAGEMENT ==========
@@ -583,6 +591,7 @@ function resetHintTimeout() {
 }
 
 function showHint() {
+    if (isProcessing) return; // Avoid board mutation mid-cascade
     const move = findAvailableMove();
     if (move) {
         const gem1 = document.querySelector(`[data-row="${move.from.row}"][data-col="${move.from.col}"]`);
@@ -726,3 +735,10 @@ AudioManager.init();
 document.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); } }, { passive: false });
 document.addEventListener('gesturestart', (e) => { e.preventDefault(); });
 document.querySelector('#game-board')?.addEventListener('dblclick', (e) => { e.preventDefault(); });
+
+// Optional: expose a simple mute toggle via keyboard (m)
+document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'm') {
+        soundEnabled = !soundEnabled;
+    }
+});
