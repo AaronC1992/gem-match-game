@@ -97,6 +97,7 @@
             margin: 0 auto;
             max-width: 500px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            position: relative;
         }
 
         .gem {
@@ -111,6 +112,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.3);
             user-select: none;
             position: relative;
+            will-change: transform;
         }
 
         .gem:active {
@@ -335,12 +337,12 @@
 
         @keyframes screenShake {
             0%, 100% { transform: translate(0, 0); }
-            10%, 30%, 50%, 70%, 90% { transform: translate(-5px, 5px); }
-            20%, 40%, 60%, 80% { transform: translate(5px, -5px); }
+            10%, 30%, 50%, 70%, 90% { transform: translate(-3px, 3px); }
+            20%, 40%, 60%, 80% { transform: translate(3px, -3px); }
         }
 
-        .shake {
-            animation: screenShake 0.5s;
+        #game-board.shake {
+            animation: screenShake 0.4s;
         }
 
         @media (max-width: 600px) {

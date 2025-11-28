@@ -524,8 +524,8 @@ async function processMatches() {
         
         // Screen shake for big combos
         if (comboCount >= 3) {
-            document.body.classList.add('shake');
-            setTimeout(() => document.body.classList.remove('shake'), 500);
+            gameBoard.classList.add('shake');
+            setTimeout(() => gameBoard.classList.remove('shake'), 400);
         }
         
         updateDisplay();
@@ -541,13 +541,14 @@ async function processMatches() {
         
         dropGems();
         fillBoard();
+        
+        // Smooth update with minimal visual disruption
+        await wait(50); // Brief pause before update
         renderBoard(); // Smart update - only changes affected gems
         
         // Add falling animation only to new/moved gems
+        await wait(20); // Let DOM update
         document.querySelectorAll('.gem').forEach(gem => {
-            const row = parseInt(gem.dataset.row);
-            const wasEmpty = board[row][parseInt(gem.dataset.col)].type !== -1;
-            
             if (!gem.classList.contains('special-striped') && 
                 !gem.classList.contains('special-bomb') && 
                 !gem.classList.contains('falling')) {
@@ -556,7 +557,7 @@ async function processMatches() {
             }
         });
         
-        await wait(400);
+        await wait(380);
         
         matches = checkMatches();
     }
