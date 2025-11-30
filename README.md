@@ -2,6 +2,8 @@
 
 A fully-featured, responsive match-3 puzzle game built with vanilla JavaScript, HTML5, and CSS3. Designed with clean architecture, accessibility features, and extensibility in mind.
 
+## 🎮 [Play the Game Here](https://aaronc1992.github.io/gem-match-game/)
+
 ---
 
 ## 🎮 Features
