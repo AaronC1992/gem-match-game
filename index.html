@@ -92,6 +92,14 @@
         .gem[data-type="3"] { background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 50%, #5f48d4 100%); }
         .gem[data-type="4"] { background: linear-gradient(135deg, #55efc4 0%, #00b894 50%, #008866 100%); }
         .gem[data-type="5"] { background: linear-gradient(135deg, #fd79a8 0%, #e84393 50%, #b52570 100%); }
+        
+        /* Color-Blind Mode: Add distinct patterns */
+        body.color-blind .gem[data-type="0"] { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 50%, #c23866 100%), repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.15) 10px, rgba(255,255,255,0.15) 20px); background-blend-mode: normal; }
+        body.color-blind .gem[data-type="1"] { background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 50%, #2d6a5f 100%), repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(255,255,255,0.2) 8px, rgba(255,255,255,0.2) 16px); background-blend-mode: normal; }
+        body.color-blind .gem[data-type="2"] { background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3), transparent 70%), linear-gradient(135deg, #ffd93d 0%, #f9ca24 50%, #d4a017 100%); }
+        body.color-blind .gem[data-type="3"] { background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 50%, #5f48d4 100%), repeating-linear-gradient(135deg, transparent, transparent 12px, rgba(0,0,0,0.15) 12px, rgba(0,0,0,0.15) 24px); background-blend-mode: normal; }
+        body.color-blind .gem[data-type="4"] { background: linear-gradient(135deg, #55efc4 0%, #00b894 50%, #008866 100%), conic-gradient(from 45deg, transparent 0deg, rgba(255,255,255,0.2) 90deg, transparent 180deg, rgba(255,255,255,0.2) 270deg, transparent 360deg); }
+        body.color-blind .gem[data-type="5"] { background: linear-gradient(135deg, #fd79a8 0%, #e84393 50%, #b52570 100%), repeating-linear-gradient(0deg, transparent, transparent 6px, rgba(0,0,0,0.12) 6px, rgba(0,0,0,0.12) 12px); background-blend-mode: normal; }
 
         .btn { background: white; color: #667eea; border: none; padding: 15px 30px; font-size: 1.2em; border-radius: 25px; cursor: pointer; margin: 10px 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: all 0.2s ease; font-weight: bold; }
         .btn:hover { transform: translateY(-3px); box-shadow: 0 6px 25px rgba(0,0,0,0.3); background: linear-gradient(135deg, #fff, #f0f0f0); }
@@ -154,6 +162,9 @@
             <button class="btn" id="new-game">🎮 New Game</button>
             <button class="btn secondary" id="hint-btn">💡 Hint</button>
             <button class="btn secondary" id="shuffle-btn">🔀 Shuffle</button>
+            <button class="btn secondary" id="pause-btn">⏸️ Pause</button>
+            <button class="btn secondary" id="settings-btn">⚙️ Settings</button>
+            <button class="btn secondary" id="achievements-btn">🏆 Achievements</button>
         </div>
     </div>
 
@@ -167,6 +178,7 @@
                 <button class="mode-btn" data-mode="timed">⏱️ Time Attack<br><small>60 Seconds</small></button>
                 <button class="mode-btn" data-mode="endless">♾️ Endless<br><small>Unlimited</small></button>
                 <button class="mode-btn" data-mode="zen">🧘 Zen<br><small>Relaxed</small></button>
+                <button class="mode-btn" data-mode="level">🗺️ Levels<br><small>Progressive</small></button>
             </div>
             <p style="font-size: 0.9em; margin-top: 20px;">Match 3+ gems | Create special combos | Beat your high score!</p>
         </div>
@@ -204,6 +216,41 @@
     <div class="achievement-popup" id="achievement-popup">
         <h3>🏆 Achievement Unlocked!</h3>
         <p id="achievement-text"></p>
+    </div>
+
+    <!-- Pause Overlay -->
+    <div class="modal" id="pause-modal">
+        <div class="modal-content">
+            <h2>Game Paused</h2>
+            <p>Press Resume to continue.</p>
+            <button class="btn" id="resume-btn">▶️ Resume</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <h2>⚙️ Settings</h2>
+            <div style="text-align:left; display:flex; flex-direction:column; gap:14px; font-size:1.1em;">
+                <label><input type="checkbox" id="toggle-sound" checked> Enable Sound</label>
+                <label><input type="checkbox" id="toggle-colorblind"> Color-Blind Mode</label>
+            </div>
+            <div style="margin-top:24px; display:flex; gap:12px; justify-content:center;">
+                <button class="btn" id="save-settings">💾 Save</button>
+                <button class="btn secondary" id="close-settings">✖ Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Achievements Modal -->
+    <div class="modal" id="achievements-modal">
+        <div class="modal-content">
+            <h2>🏆 Achievements</h2>
+            <div id="achievements-list" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; text-align:left; font-size:0.95em;">
+                <!-- Filled dynamically -->
+            </div>
+            <button class="btn secondary" id="close-achievements">Close</button>
+        </div>
     </div>
 
     <script src="game.js"></script>

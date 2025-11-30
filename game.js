@@ -1,13 +1,489 @@
-// ========== GAME CONFIGURATION ==========
-const BOARD_SIZE = 8;
-const GEM_TYPES = 6;
-const GEM_SYMBOLS = ['💎', '🔷', '⭐', '💜', '💚', '🌸'];
+// ========== GLOBAL CONFIGURATION ==========
+/**
+ * Central configuration for Gem Cascade.
+ * All tunable constants live here to avoid magic numbers throughout logic.
+ * Adjusting values in this object rebalances the game without code changes.
+ * @type {Object}
+ */
+const Config = {
+    boardSize: 8,
+    gemTypes: 6,
+    gemSymbols: ['💎', '🔷', '⭐', '💜', '💚', '🌸'],
+    scoring: {
+        baseMatch: 10,              // points per matched gem
+        comboBonusPerStep: 5        // bonus per cascade step beyond first
+    },
+    specials: {
+        stripedLength: 4,           // exact length producing striped gem
+        bombLength: 5               // length threshold producing bomb gem (>= bombLength)
+    },
+    timers: {
+        timedModeSeconds: 60        // default seconds for timed mode
+    },
+    achievements: {
+        score1000: 1000,
+        score5000: 5000,
+        gems100: 100
+    },
+    animations: {
+        swapDuration: 250,          // ms for swap animation
+        matchPulse: 600,            // ms for match pulse keyframe total
+        fadeOut: 300,               // ms for fade-out removal
+        dropBaseDuration: 300       // base ms for a drop (stagger adds row factor)
+    }
+};
+
+// ========== ARCHITECTURE (CLASS SCAFFOLDS) ==========
+// Transitional scaffolding layer: wraps existing procedural functions.
+// Subsequent refactor steps will migrate logic INTO these classes instead
+// of delegating outward. Current goal: establish interfaces without altering behavior.
+
+class SettingsManager {
+    constructor() {
+        this.soundEnabled = true;
+        this.colorBlindMode = false; // future visual alternative flag
+        this.storageKey = 'gemCascadeSettings';
+        this.load();
+    }
+    toggleSound() {
+        this.soundEnabled = !this.soundEnabled;
+        // Keep global flag in sync until refactor fully removes it
+        soundEnabled = this.soundEnabled;
+    }
+    setColorBlindMode(enabled) {
+        this.colorBlindMode = !!enabled;
+        // Renderer adaptation will come later
+    }
+    save() {
+        localStorage.setItem(this.storageKey, JSON.stringify({ soundEnabled: this.soundEnabled, colorBlindMode: this.colorBlindMode }));
+    }
+    load() {
+        const raw = localStorage.getItem(this.storageKey);
+        if (!raw) return;
+        try {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed.soundEnabled === 'boolean') this.soundEnabled = parsed.soundEnabled;
+            if (typeof parsed.colorBlindMode === 'boolean') this.colorBlindMode = parsed.colorBlindMode;
+            soundEnabled = this.soundEnabled;
+        } catch(e) {}
+    }
+}
+
+class Board {
+    constructor(config) {
+        this.config = config;
+    }
+    create() {
+        // Initialize global board (transitional; later localize to this.grid)
+        board = [];
+        for (let row = 0; row < this.config.boardSize; row++) {
+            board[row] = [];
+            for (let col = 0; col < this.config.boardSize; col++) {
+                board[row][col] = {
+                    type: Math.floor(Math.random() * this.config.gemTypes),
+                    special: null
+                };
+            }
+        }
+    }
+    render() { renderBoard(); }
+    shuffle() { shuffleBoard(); }
+    updateGem(row, col) { updateGem(row, col); }
+    hasAvailableMove() { return hasAvailableMove(); }
+    findAvailableMove() { return findAvailableMove(); }
+}
+
+class MatchFinder {
+    constructor(config) { this.config = config; }
+    findMatches() {
+        const matches = [];
+        const matchGroups = [];
+        // Horizontal
+        for (let row = 0; row < this.config.boardSize; row++) {
+            for (let col = 0; col < this.config.boardSize - 2; col++) {
+                const type = board[row][col].type;
+                if (type === board[row][col + 1].type && type === board[row][col + 2].type) {
+                    let matchLength = 3;
+                    const group = [];
+                    while (col + matchLength < this.config.boardSize && board[row][col + matchLength].type === type) {
+                        matchLength++;
+                    }
+                    for (let i = 0; i < matchLength; i++) {
+                        const match = { row, col: col + i };
+                        matches.push(match);
+                        group.push(match);
+                    }
+                    matchGroups.push({ matches: group, length: matchLength, direction: 'horizontal' });
+                    col += matchLength - 1;
+                }
+            }
+        }
+        // Vertical
+        for (let col = 0; col < this.config.boardSize; col++) {
+            for (let row = 0; row < this.config.boardSize - 2; row++) {
+                const type = board[row][col].type;
+                if (type === board[row + 1][col].type && type === board[row + 2][col].type) {
+                    let matchLength = 3;
+                    const group = [];
+                    while (row + matchLength < this.config.boardSize && board[row + matchLength][col].type === type) {
+                        matchLength++;
+                    }
+                    for (let i = 0; i < matchLength; i++) {
+                        const match = { row: row + i, col };
+                        matches.push(match);
+                        group.push(match);
+                    }
+                    matchGroups.push({ matches: group, length: matchLength, direction: 'vertical' });
+                    row += matchLength - 1;
+                }
+            }
+        }
+        const uniqueMatches = matches.filter((m, idx, self) => idx === self.findIndex(x => x.row === m.row && x.col === m.col));
+        uniqueMatches.matchGroups = matchGroups;
+        return uniqueMatches;
+    }
+    wouldCreateMatch(r1,c1,r2,c2) { return wouldCreateMatch(r1,c1,r2,c2); }
+}
+
+class Cascader {
+    constructor(game, config) {
+        this.game = game; // access to matches, renderer, etc.
+        this.config = config;
+    }
+    async processAll() {
+        // Migrated logic from global processMatches (transitional; still uses globals).
+        let matches = this.game.matches.findMatches();
+        let comboCount = 0;
+        while (matches.length > 0) {
+            comboCount++;
+            currentCombo = comboCount;
+            maxCombo = Math.max(maxCombo, currentCombo);
+            if (comboCount > 1) {
+                showComboPopup(comboCount);
+                AudioManager.combo(comboCount);
+            }
+            await this.game.animations.highlightMatches(matches);
+            const baseScore = matches.length * this.config.scoring.baseMatch;
+            const comboBonus = comboCount > 1 ? (comboCount - 1) * this.config.scoring.comboBonusPerStep : 0;
+            score += baseScore + comboBonus;
+            totalGemsMatched += matches.length;
+            // special gem creation
+            matches.matchGroups.forEach(group => {
+                if (group.length === this.config.specials.stripedLength) {
+                    const middleMatch = group.matches[Math.floor(group.length / 2)];
+                    board[middleMatch.row][middleMatch.col] = {
+                        type: board[middleMatch.row][middleMatch.col].type,
+                        special: 'striped',
+                        direction: group.direction
+                    };
+                    specialGemsCreated++;
+                    AudioManager.special();
+                    GameApp.eventBus.emit('specialCreated', { kind: 'striped' });
+                } else if (group.length >= this.config.specials.bombLength) {
+                    const middleMatch = group.matches[Math.floor(group.length / 2)];
+                    board[middleMatch.row][middleMatch.col] = {
+                        type: board[middleMatch.row][middleMatch.col].type,
+                        special: 'bomb'
+                    };
+                    specialGemsCreated++;
+                    AudioManager.special();
+                    GameApp.eventBus.emit('specialCreated', { kind: 'bomb' });
+                }
+            });
+            if (comboCount >= 3) {
+                gameBoard.classList.add('shake');
+                setTimeout(() => gameBoard.classList.remove('shake'), 400);
+            }
+            updateDisplay();
+            checkAchievements();
+            GameApp.eventBus.emit('scoreChanged', { score, combo: currentCombo });
+            // mark removals & fade out
+            await this.game.animations.fadeMatches(matches);
+            await this.animateGravityAndRefill();
+            await this.game.animations.gravityRefill();
+            matches = this.game.matches.findMatches();
+        }
+        currentCombo = 0;
+        updateDisplay();
+        GameApp.eventBus.emit('cascadeComplete', { score });
+        if (gameMode === 'classic' && !hasAvailableMove()) shuffleBoard();
+        if (gameMode === 'level') {
+            GameApp.levelSystem.advanceIfComplete(score);
+        }
+    }
+    async animateGravityAndRefill() {
+        // Migrated from animateGemDrop
+        for (let col = 0; col < this.config.boardSize; col++) {
+            let writeRow = this.config.boardSize - 1;
+            for (let row = this.config.boardSize - 1; row >= 0; row--) {
+                if (board[row][col].type !== -1) {
+                    const cell = board[row][col];
+                    board[writeRow][col] = cell;
+                    if (writeRow !== row) {
+                        board[row][col] = { type: -1, special: null };
+                    }
+                    writeRow--;
+                }
+            }
+            for (let row = writeRow; row >= 0; row--) {
+                board[row][col] = { type: Math.floor(Math.random() * this.config.gemTypes), special: null };
+            }
+        }
+        // Rebuild element map after structural gravity changes
+        this.game.renderer.rebuildAfterGravity(board);
+        document.querySelectorAll('#game-board .gem').forEach(el => {
+            const row = parseInt(el.dataset.row, 10);
+            const delay = row * 0.025;
+            const duration = 0.3 + row * 0.015;
+            el.style.setProperty('--delay', `${delay}s`);
+            el.style.setProperty('--duration', `${duration}s`);
+            el.classList.add('dropping');
+            setTimeout(() => {
+                el.classList.remove('dropping');
+                el.style.removeProperty('--delay');
+                el.style.removeProperty('--duration');
+            }, (duration + delay) * 1000 + 50);
+        });
+    }
+}
+
+class Renderer {
+    constructor(config) {
+        this.config = config;
+        this.elementMap = [];
+    }
+    buildInitial(boardData) {
+        this.elementMap = [];
+        gameBoard.innerHTML = '';
+        for (let row = 0; row < this.config.boardSize; row++) {
+            this.elementMap[row] = [];
+            for (let col = 0; col < this.config.boardSize; col++) {
+                const el = this._createGemElement(boardData[row][col], row, col);
+                this.elementMap[row][col] = el;
+                gameBoard.appendChild(el);
+            }
+        }
+    }
+    renderAll(boardData) {
+        // Update existing elements without rebuilding DOM
+        for (let row = 0; row < this.config.boardSize; row++) {
+            for (let col = 0; col < this.config.boardSize; col++) {
+                this.updateGem(row, col, boardData[row][col]);
+            }
+        }
+    }
+    updateGem(row, col, gemData = board[row][col]) {
+        const gem = this.getGem(row, col);
+        if (!gem) return;
+        gem.dataset.type = gemData.type;
+        gem.textContent = Config.gemSymbols[gemData.type];
+        gem.classList.remove('special-striped', 'special-wrapped', 'special-bomb');
+        if (gemData.special === 'striped') {
+            gem.classList.add('special-striped');
+            gem.textContent = '⚡' + Config.gemSymbols[gemData.type];
+        } else if (gemData.special === 'wrapped') {
+            gem.classList.add('special-wrapped');
+            gem.textContent = '🎁';
+        } else if (gemData.special === 'bomb') {
+            gem.classList.add('special-bomb');
+            gem.textContent = '💣';
+        }
+    }
+    getGem(row, col) {
+        return (this.elementMap[row] && this.elementMap[row][col]) ? this.elementMap[row][col] : null;
+    }
+    highlight(row, col, on) {
+        const gem = this.getGem(row, col);
+        if (gem) gem.classList.toggle('selected', !!on);
+    }
+    animateSwap(gem1, gem2) {
+        const el1 = this.getGem(gem1.row, gem1.col);
+        const el2 = this.getGem(gem2.row, gem2.col);
+        if (!el1 || !el2) return;
+        const dx = (gem2.col - gem1.col) * 100;
+        const dy = (gem2.row - gem1.row) * 100;
+        const ms = Config.animations.swapDuration;
+        el1.style.transition = `transform ${ms}ms ease-out`;
+        el2.style.transition = `transform ${ms}ms ease-out`;
+        el1.style.transform = `translate(${dx}%, ${dy}%)`;
+        el2.style.transform = `translate(${-dx}%, ${-dy}%)`;
+        setTimeout(() => {
+            el1.style.transition = '';
+            el2.style.transition = '';
+            el1.style.transform = '';
+            el2.style.transform = '';
+        }, ms);
+    }
+    rebuildAfterGravity(boardData) {
+        // After large structural changes (gravity) it's simpler to rebuild
+        this.buildInitial(boardData);
+    }
+    _createGemElement(gemData, row, col) {
+        const gem = document.createElement('div');
+        gem.className = 'gem';
+        gem.dataset.row = row;
+        gem.dataset.col = col;
+        gem.dataset.type = gemData.type;
+        gem.textContent = Config.gemSymbols[gemData.type];
+        gem.style.gridRowStart = (row + 1).toString();
+        gem.style.gridColumnStart = (col + 1).toString();
+        if (gemData.special === 'striped') {
+            gem.classList.add('special-striped');
+            gem.textContent = '⚡' + Config.gemSymbols[gemData.type];
+        } else if (gemData.special === 'wrapped') {
+            gem.classList.add('special-wrapped');
+            gem.textContent = '🎁';
+        } else if (gemData.special === 'bomb') {
+            gem.classList.add('special-bomb');
+            gem.textContent = '💣';
+        }
+        gem.addEventListener('click', () => handleGemClick(row, col));
+        gem.addEventListener('touchstart', (e) => { e.preventDefault(); handleGemClick(row, col); });
+        return gem;
+    }
+}
+
+// ========== ANIMATION MANAGER ==========
+class AnimationManager {
+    constructor(config, renderer) {
+        this.config = config;
+        this.renderer = renderer;
+    }
+    swap(gem1, gem2) {
+        return new Promise(resolve => {
+            this.renderer.animateSwap(gem1, gem2);
+            setTimeout(resolve, this.config.animations.swapDuration);
+        });
+    }
+    highlightMatches(matches) {
+        return new Promise(resolve => {
+            matches.forEach(match => {
+                const gem = this.renderer.getGem(match.row, match.col);
+                if (gem) {
+                    gem.classList.add('matching');
+                    const rect = gem.getBoundingClientRect();
+                    const color = window.getComputedStyle(gem).background;
+                    createParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, color.split('(')[0], 6);
+                    const delay = (this.config.boardSize - match.row) * 0.03;
+                    gem.style.setProperty('--delay', `${delay}s`);
+                }
+            });
+            setTimeout(resolve, 400);
+        });
+    }
+    fadeMatches(matches) {
+        return new Promise(resolve => {
+            matches.forEach(match => {
+                if (board[match.row][match.col].special !== 'striped' && board[match.row][match.col].special !== 'bomb') {
+                    const gem = this.renderer.getGem(match.row, match.col);
+                    if (gem) gem.classList.add('fade-out');
+                    board[match.row][match.col] = { type: -1, special: null };
+                }
+            });
+            setTimeout(() => {
+                document.querySelectorAll('.fade-out').forEach(gem => setTimeout(() => gem.remove(), 40));
+                resolve();
+            }, this.config.animations.fadeOut);
+        });
+    }
+    gravityRefill() {
+        const maxRow = this.config.boardSize - 1;
+        const maxDelay = maxRow * 0.025;
+        const maxDuration = 0.3 + maxRow * 0.015;
+        const totalMs = (maxDelay + maxDuration) * 1000 + 120;
+        return new Promise(resolve => setTimeout(resolve, totalMs));
+    }
+}
+
+// ========== EVENT BUS ==========
+class EventBus {
+    constructor() { this.handlers = {}; }
+    on(event, fn) { (this.handlers[event] = this.handlers[event] || []).push(fn); }
+    emit(event, payload) { (this.handlers[event] || []).forEach(fn => { try { fn(payload); } catch(e) { console.error(e); } }); }
+}
+
+// ========== LEVEL SYSTEM ==========
+class LevelSystem {
+    constructor(game) {
+        this.game = game;
+        this.levels = [
+            { id:1, targetScore: 500, moves: 25 },
+            { id:2, targetScore: 1200, moves: 28 },
+            { id:3, targetScore: 2500, moves: 30 },
+            { id:4, targetScore: 4000, moves: 32 },
+            { id:5, targetScore: 6000, moves: 34 }
+        ];
+        this.storageKey = 'gemCascadeLevelProgress';
+        this.currentLevelIndex = 0;
+        this.load();
+    }
+    current() { return this.levels[this.currentLevelIndex]; }
+    advanceIfComplete(score) {
+        const lvl = this.current();
+        if (score >= lvl.targetScore) {
+            this.currentLevelIndex = Math.min(this.currentLevelIndex + 1, this.levels.length - 1);
+            this.save();
+            GameApp.eventBus.emit('levelComplete', { level: lvl.id });
+        }
+    }
+    save() { localStorage.setItem(this.storageKey, JSON.stringify({ levelIndex: this.currentLevelIndex })); }
+    load() { try { const raw = localStorage.getItem(this.storageKey); if (!raw) return; const p = JSON.parse(raw); if (typeof p.levelIndex === 'number') this.currentLevelIndex = p.levelIndex; } catch(e) {} }
+}
+
+class AchievementManager {
+    constructor(config) { this.config = config; }
+    checkAll() { return checkAchievements(); }
+    unlock(key) { return unlockAchievement(key); }
+}
+
+class InputController {
+    constructor(game) { this.game = game; }
+    // Future: keyboard navigation & accessibility
+    initMouse() { /* existing listeners remain globally; will migrate later */ }
+}
+
+class Game {
+    constructor(config) {
+        this.config = config;
+        this.settings = new SettingsManager();
+        this.board = new Board(config);
+        this.matches = new MatchFinder(config);
+        this.cascader = new Cascader(this, config);
+        this.renderer = new Renderer(config);
+        this.animations = new AnimationManager(config, this.renderer);
+        this.achievements = new AchievementManager(config);
+        this.input = new InputController(this);
+        this.eventBus = new EventBus();
+        this.levelSystem = new LevelSystem(this);
+        this.paused = false;
+    }
+    init(mode) { initGame(mode); }
+    end() { endGame(); }
+    pause() {
+        if (this.paused) return;
+        this.paused = true;
+        if (gameTimer) { clearInterval(gameTimer); gameTimer = null; }
+        document.getElementById('pause-modal')?.classList.add('active');
+    }
+    resume() {
+        if (!this.paused) return;
+        this.paused = false;
+        document.getElementById('pause-modal')?.classList.remove('active');
+        const modeConfig = GAME_MODES[gameMode];
+        if (modeConfig.time) gameTimer = setInterval(updateTimer, 1000);
+    }
+}
+
+// Global singleton instance (transitional). Later we will remove globals.
+const GameApp = new Game(Config);
+window.GameApp = GameApp; // exposed for debugging & future console experimentation
 
 const GAME_MODES = {
     classic: { moves: 30, time: null, name: 'Classic' },
-    timed: { moves: null, time: 60, name: 'Time Attack' },
+    timed: { moves: null, time: Config.timers.timedModeSeconds, name: 'Time Attack' },
     endless: { moves: 999, time: null, name: 'Endless' },
-    zen: { moves: 999, time: null, name: 'Zen' }
+    zen: { moves: 999, time: null, name: 'Zen' },
+    level: { moves: null, time: null, name: 'Levels' }
 };
 
 // ========== GAME STATE ==========
@@ -37,6 +513,18 @@ const shuffleBtn = document.getElementById('shuffle-btn');
 const startModal = document.getElementById('start-modal');
 const gameoverModal = document.getElementById('gameover-modal');
 const achievementPopup = document.getElementById('achievement-popup');
+const pauseBtn = document.getElementById('pause-btn');
+const settingsBtn = document.getElementById('settings-btn');
+const achievementsBtn = document.getElementById('achievements-btn');
+const resumeBtn = document.getElementById('resume-btn');
+const settingsModal = document.getElementById('settings-modal');
+const achievementsModal = document.getElementById('achievements-modal');
+const toggleSoundChk = document.getElementById('toggle-sound');
+const toggleColorBlindChk = document.getElementById('toggle-colorblind');
+const saveSettingsBtn = document.getElementById('save-settings');
+const closeSettingsBtn = document.getElementById('close-settings');
+const closeAchievementsBtn = document.getElementById('close-achievements');
+const pauseModal = document.getElementById('pause-modal');
 
 // ========== AUDIO SYSTEM ==========
 const AudioManager = {
@@ -140,6 +628,7 @@ function unlockAchievement(key) {
     achievementPopup.classList.add('show');
     AudioManager.success();
     setTimeout(() => achievementPopup.classList.remove('show'), 3000);
+    GameApp.eventBus.emit('achievementUnlocked', { key, name: achievements[key].name });
 }
 
 // ========== INITIALIZE GAME ==========
@@ -153,8 +642,14 @@ function initGame(mode = 'classic') {
     maxCombo = 0;
     totalGemsMatched = 0;
     specialGemsCreated = 0;
-    moves = modeConfig.moves || 30;
-    timeLeft = modeConfig.time || 60;
+    if (mode === 'level') {
+        const lvl = GameApp.levelSystem.current();
+        moves = lvl.moves;
+        timeLeft = 0; // level mode uses moves only for now
+    } else {
+        moves = modeConfig.moves || 30;
+        timeLeft = modeConfig.time || 60;
+    }
     selectedGem = null;
     isProcessing = false;
     
@@ -163,10 +658,11 @@ function initGame(mode = 'classic') {
     
     // Build initial board ensuring: no existing matches + at least one possible move
     do {
-        createBoard();
-    } while (checkMatches().length > 0 || !hasAvailableMove());
-    renderBoard();
+        GameApp.board.create();
+    } while (GameApp.matches.findMatches().length > 0 || !hasAvailableMove());
+    GameApp.renderer.buildInitial(board);
     updateDisplay();
+    GameApp.eventBus.emit('gameStarted', { mode, moves, timeLeft });
 
     // Reset any danger coloring on timed/moves displays
     movesDisplay.parentElement.style.color = '';
@@ -191,11 +687,11 @@ function updateTimer() {
 // ========== BOARD MANAGEMENT ==========
 function createBoard() {
     board = [];
-    for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let row = 0; row < Config.boardSize; row++) {
         board[row] = [];
-        for (let col = 0; col < BOARD_SIZE; col++) {
+        for (let col = 0; col < Config.boardSize; col++) {
             board[row][col] = {
-                type: Math.floor(Math.random() * GEM_TYPES),
+                type: Math.floor(Math.random() * Config.gemTypes),
                 special: null
             };
         }
@@ -204,8 +700,8 @@ function createBoard() {
 
 function renderBoard() {
     gameBoard.innerHTML = '';
-    for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
+    for (let row = 0; row < Config.boardSize; row++) {
+        for (let col = 0; col < Config.boardSize; col++) {
             const gem = createGemElement(row, col);
             gameBoard.appendChild(gem);
         }
@@ -219,14 +715,14 @@ function createGemElement(row, col) {
     gem.dataset.row = row;
     gem.dataset.col = col;
     gem.dataset.type = gemData.type;
-    gem.textContent = GEM_SYMBOLS[gemData.type];
+    gem.textContent = Config.gemSymbols[gemData.type];
     // Ensure gem is placed in the correct grid cell regardless of DOM order
     gem.style.gridRowStart = (row + 1).toString();
     gem.style.gridColumnStart = (col + 1).toString();
     
     if (gemData.special === 'striped') {
         gem.classList.add('special-striped');
-        gem.textContent = '⚡' + GEM_SYMBOLS[gemData.type];
+        gem.textContent = '⚡' + Config.gemSymbols[gemData.type];
     } else if (gemData.special === 'wrapped') {
         gem.classList.add('special-wrapped');
         gem.textContent = '🎁';
@@ -267,29 +763,11 @@ function handleGemClick(row, col) {
 }
 
 function highlightGem(row, col, highlight) {
-    const gem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-    if (gem) gem.classList.toggle('selected', highlight);
+    GameApp.renderer.highlight(row, col, highlight);
 }
 
 function animateSwap(gem1, gem2) {
-    const el1 = document.querySelector(`[data-row="${gem1.row}"][data-col="${gem1.col}"]`);
-    const el2 = document.querySelector(`[data-row="${gem2.row}"][data-col="${gem2.col}"]`);
-    if (!el1 || !el2) return;
-    
-    const dx = (gem2.col - gem1.col) * 100;
-    const dy = (gem2.row - gem1.row) * 100;
-    
-    el1.style.transition = 'transform 0.25s ease-out';
-    el2.style.transition = 'transform 0.25s ease-out';
-    el1.style.transform = `translate(${dx}%, ${dy}%)`;
-    el2.style.transform = `translate(${-dx}%, ${-dy}%)`;
-    
-    setTimeout(() => {
-        el1.style.transition = '';
-        el2.style.transition = '';
-        el1.style.transform = '';
-        el2.style.transform = '';
-    }, 250);
+    GameApp.renderer.animateSwap(gem1, gem2);
 }
 
 function areAdjacent(gem1, gem2) {
@@ -309,7 +787,7 @@ async function swapGems(gem1, gem2) {
     board[gem1.row][gem1.col] = temp2;
     board[gem2.row][gem2.col] = temp1;
     
-    const willMatch = checkMatches().length > 0;
+    const willMatch = GameApp.matches.findMatches().length > 0;
     
     // Restore original state
     board[gem1.row][gem1.col] = temp1;
@@ -323,257 +801,45 @@ async function swapGems(gem1, gem2) {
         return;
     }
     
-    // Valid move - animate the swap
-    animateSwap(gem1, gem2);
-    
-    // Do the actual swap
+    // Valid move - logical swap then centralized animation
     board[gem1.row][gem1.col] = temp2;
     board[gem2.row][gem2.col] = temp1;
-    
-    await wait(250);
+    await GameApp.animations.swap(gem1, gem2);
     
     // Update DOM
-    updateGem(gem1.row, gem1.col);
-    updateGem(gem2.row, gem2.col);
+    GameApp.renderer.updateGem(gem1.row, gem1.col);
+    GameApp.renderer.updateGem(gem2.row, gem2.col);
     
-    if (gameMode === 'classic') moves--;
+    if (gameMode === 'classic' || gameMode === 'level') moves--;
     updateDisplay();
     AudioManager.match();
     
-    await processMatches();
+    await GameApp.cascader.processAll();
     
     selectedGem = null;
     isProcessing = false;
     
-    if (gameMode === 'classic' && moves <= 0) endGame();
+    if ((gameMode === 'classic' || gameMode === 'level') && moves <= 0) {
+        // In level mode, treat as failure unless target met
+        if (gameMode === 'level') {
+            const targetMet = score >= GameApp.levelSystem.current().targetScore;
+            if (targetMet) {
+                GameApp.levelSystem.advanceIfComplete(score);
+            } else {
+                endGame();
+            }
+        } else endGame();
+    }
     resetHintTimeout();
 }
 
-function updateGem(row, col) {
-    const gem = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-    if (!gem) return;
-    
-    const gemData = board[row][col];
-    gem.dataset.type = gemData.type;
-    gem.textContent = GEM_SYMBOLS[gemData.type];
-    gem.classList.remove('special-striped', 'special-wrapped', 'special-bomb');
-    // Keep CSS grid position in sync
-    gem.style.gridRowStart = (row + 1).toString();
-    gem.style.gridColumnStart = (col + 1).toString();
-    
-    if (gemData.special === 'striped') {
-        gem.classList.add('special-striped');
-        gem.textContent = '⚡' + GEM_SYMBOLS[gemData.type];
-    } else if (gemData.special === 'wrapped') {
-        gem.classList.add('special-wrapped');
-        gem.textContent = '🎁';
-    } else if (gemData.special === 'bomb') {
-        gem.classList.add('special-bomb');
-        gem.textContent = '💣';
-    }
-}
+// (Removed standalone updateGem; now handled by Renderer.updateGem)
 
-function checkMatches() {
-    const matches = [];
-    const matchGroups = [];
-    
-    // Check horizontal
-    for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE - 2; col++) {
-            const type = board[row][col].type;
-            if (type === board[row][col + 1].type && type === board[row][col + 2].type) {
-                let matchLength = 3;
-                const group = [];
-                
-                while (col + matchLength < BOARD_SIZE && board[row][col + matchLength].type === type) {
-                    matchLength++;
-                }
-                
-                for (let i = 0; i < matchLength; i++) {
-                    const match = { row, col: col + i };
-                    matches.push(match);
-                    group.push(match);
-                }
-                
-                matchGroups.push({ matches: group, length: matchLength, direction: 'horizontal' });
-                col += matchLength - 1;
-            }
-        }
-    }
-    
-    // Check vertical
-    for (let col = 0; col < BOARD_SIZE; col++) {
-        for (let row = 0; row < BOARD_SIZE - 2; row++) {
-            const type = board[row][col].type;
-            if (type === board[row + 1][col].type && type === board[row + 2][col].type) {
-                let matchLength = 3;
-                const group = [];
-                
-                while (row + matchLength < BOARD_SIZE && board[row + matchLength][col].type === type) {
-                    matchLength++;
-                }
-                
-                for (let i = 0; i < matchLength; i++) {
-                    const match = { row: row + i, col };
-                    matches.push(match);
-                    group.push(match);
-                }
-                
-                matchGroups.push({ matches: group, length: matchLength, direction: 'vertical' });
-                row += matchLength - 1;
-            }
-        }
-    }
-    
-    // Remove duplicates
-    const uniqueMatches = matches.filter((match, index, self) =>
-        index === self.findIndex(m => m.row === match.row && m.col === match.col)
-    );
-    
-    uniqueMatches.matchGroups = matchGroups;
-    return uniqueMatches;
-}
+// (Removed checkMatches; logic now resides in MatchFinder.findMatches())
 
-async function processMatches() {
-    let matches = checkMatches();
-    let comboCount = 0;
-    
-    while (matches.length > 0) {
-        comboCount++;
-        currentCombo = comboCount;
-        maxCombo = Math.max(maxCombo, currentCombo);
-        
-        if (comboCount > 1) {
-            showComboPopup(comboCount);
-            AudioManager.combo(comboCount);
-        }
-        
-        // Highlight and create particles
-        matches.forEach(match => {
-            const gem = document.querySelector(`[data-row="${match.row}"][data-col="${match.col}"]`);
-            if (gem) {
-                gem.classList.add('matching');
-                const rect = gem.getBoundingClientRect();
-                const color = window.getComputedStyle(gem).background;
-                createParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, color.split('(')[0], 6);
-                // Stagger fade-out by row for nicer cascade
-                const delay = (BOARD_SIZE - match.row) * 0.03; // seconds
-                gem.style.setProperty('--delay', `${delay}s`);
-            }
-        });
-        
-        await wait(400);
-        
-        // Calculate score
-        const baseScore = matches.length * 10;
-        const comboBonus = comboCount > 1 ? (comboCount - 1) * 5 : 0;
-        score += baseScore + comboBonus;
-        totalGemsMatched += matches.length;
-        
-        // Check for special gem creation
-        matches.matchGroups.forEach(group => {
-            if (group.length === 4) {
-                const middleMatch = group.matches[Math.floor(group.length / 2)];
-                board[middleMatch.row][middleMatch.col] = {
-                    type: board[middleMatch.row][middleMatch.col].type,
-                    special: 'striped',
-                    direction: group.direction
-                };
-                specialGemsCreated++;
-                AudioManager.special();
-            } else if (group.length >= 5) {
-                const middleMatch = group.matches[Math.floor(group.length / 2)];
-                board[middleMatch.row][middleMatch.col] = {
-                    type: board[middleMatch.row][middleMatch.col].type,
-                    special: 'bomb'
-                };
-                specialGemsCreated++;
-                AudioManager.special();
-            }
-        });
-        
-        // Screen shake for big combos
-        if (comboCount >= 3) {
-            gameBoard.classList.add('shake');
-            setTimeout(() => gameBoard.classList.remove('shake'), 400);
-        }
-        
-        updateDisplay();
-        checkAchievements();
-        
-        // Remove matched gems (except special)
-        matches.forEach(match => {
-            if (board[match.row][match.col].special !== 'striped' && 
-                board[match.row][match.col].special !== 'bomb') {
-                const gem = document.querySelector(`[data-row="${match.row}"][data-col="${match.col}"]`);
-                if (gem) {
-                    gem.classList.add('fade-out');
-                }
-                board[match.row][match.col] = { type: -1, special: null };
-            }
-        });
-        
-        await wait(300);
-        
-        // Remove faded gems from DOM
-        document.querySelectorAll('.fade-out').forEach(gem => {
-            // Clear any transform after animation ends
-            setTimeout(() => gem.remove(), 40);
-        });
-        
-        // Drop and fill with physics animation
-        await animateGemDrop();
-        
-        matches = checkMatches();
-    }
-    
-    currentCombo = 0;
-    updateDisplay();
-    
-    if (gameMode === 'classic' && !hasAvailableMove()) shuffleBoard();
-}
+// (Removed global processMatches; logic now in Cascader.processAll())
 
-async function animateGemDrop() {
-    // Re-compute board by applying gravity
-    for (let col = 0; col < BOARD_SIZE; col++) {
-        let writeRow = BOARD_SIZE - 1;
-        for (let row = BOARD_SIZE - 1; row >= 0; row--) {
-            if (board[row][col].type !== -1) {
-                const cell = board[row][col];
-                board[writeRow][col] = cell;
-                if (writeRow !== row) {
-                    board[row][col] = { type: -1, special: null };
-                }
-                writeRow--;
-            }
-        }
-        // Fill remaining with new gems
-        for (let row = writeRow; row >= 0; row--) {
-            board[row][col] = {
-                type: Math.floor(Math.random() * GEM_TYPES),
-                special: null
-            };
-        }
-    }
-
-    // Re-render board in correct grid positions
-    renderBoard();
-
-    // Add staggered drop animation to simulate cascade
-    document.querySelectorAll('#game-board .gem').forEach(el => {
-        const row = parseInt(el.dataset.row, 10);
-        const delay = row * 0.025; // seconds
-        const duration = 0.3 + row * 0.015; // seconds
-        el.style.setProperty('--delay', `${delay}s`);
-        el.style.setProperty('--duration', `${duration}s`);
-        el.classList.add('dropping');
-        setTimeout(() => {
-            el.classList.remove('dropping');
-            el.style.removeProperty('--delay');
-            el.style.removeProperty('--duration');
-        }, (duration + delay) * 1000 + 50);
-    });
-}
+// (Removed global animateGemDrop; logic now in Cascader.animateGravityAndRefill())
 
 function showComboPopup(combo) {
     const popup = document.createElement('div');
@@ -594,9 +860,8 @@ function showHint() {
     if (isProcessing) return; // Avoid board mutation mid-cascade
     const move = findAvailableMove();
     if (move) {
-        const gem1 = document.querySelector(`[data-row="${move.from.row}"][data-col="${move.from.col}"]`);
-        const gem2 = document.querySelector(`[data-row="${move.to.row}"][data-col="${move.to.col}"]`);
-        
+        const gem1 = GameApp.renderer.getGem(move.from.row, move.from.col);
+        const gem2 = GameApp.renderer.getGem(move.to.row, move.to.col);
         if (gem1 && gem2) {
             gem1.classList.add('hint-glow');
             gem2.classList.add('hint-glow');
@@ -609,14 +874,14 @@ function showHint() {
 }
 
 function findAvailableMove() {
-    for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
-            if (col < BOARD_SIZE - 1) {
+    for (let row = 0; row < Config.boardSize; row++) {
+        for (let col = 0; col < Config.boardSize; col++) {
+            if (col < Config.boardSize - 1) {
                 if (wouldCreateMatch(row, col, row, col + 1)) {
                     return { from: { row, col }, to: { row, col: col + 1 } };
                 }
             }
-            if (row < BOARD_SIZE - 1) {
+            if (row < Config.boardSize - 1) {
                 if (wouldCreateMatch(row, col, row + 1, col)) {
                     return { from: { row, col }, to: { row: row + 1, col } };
                 }
@@ -635,7 +900,7 @@ function wouldCreateMatch(row1, col1, row2, col2) {
     board[row1][col1] = temp2;
     board[row2][col2] = temp1;
     
-    const hasMatch = checkMatches().length > 0;
+    const hasMatch = GameApp.matches.findMatches().length > 0;
     
     // Restore
     board[row1][col1] = temp1;
@@ -650,25 +915,25 @@ function hasAvailableMove() {
 
 function shuffleBoard() {
     const types = [];
-    for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
+    for (let row = 0; row < Config.boardSize; row++) {
+        for (let col = 0; col < Config.boardSize; col++) {
             types.push(board[row][col].type);
         }
     }
-    
+
     for (let i = types.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [types[i], types[j]] = [types[j], types[i]];
     }
-    
+
     let index = 0;
-    for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
+    for (let row = 0; row < Config.boardSize; row++) {
+        for (let col = 0; col < Config.boardSize; col++) {
             board[row][col] = { type: types[index++], special: null };
         }
     }
-    
-    renderBoard();
+
+    GameApp.renderer.renderAll(board);
 }
 
 // ========== UI UPDATES ==========
@@ -676,6 +941,12 @@ function updateDisplay() {
     scoreDisplay.textContent = score;
     movesDisplay.textContent = gameMode === 'timed' ? timeLeft + 's' : moves;
     comboDisplay.textContent = currentCombo > 0 ? currentCombo + 'x' : '0x';
+    if (gameMode === 'level') {
+        const target = GameApp.levelSystem.current().targetScore;
+        scoreDisplay.parentElement.querySelector('span.score-value').textContent = score;
+        // Optionally show target in title attribute for now
+        scoreDisplay.parentElement.title = `Target: ${target}`;
+    }
 }
 
 function endGame() {
@@ -685,8 +956,14 @@ function endGame() {
     const currentHigh = parseInt(localStorage.getItem(highScoreKey)) || 0;
     if (score > currentHigh) localStorage.setItem(highScoreKey, score);
     
-    document.getElementById('gameover-title').textContent = 
-        score > currentHigh ? '🎉 NEW HIGH SCORE! 🎉' : 'Game Over!';
+    let title;
+    if (gameMode === 'level') {
+        const target = GameApp.levelSystem.current().targetScore;
+        title = score >= target ? '✅ Level Complete!' : 'Level Failed';
+    } else {
+        title = score > currentHigh ? '🎉 NEW HIGH SCORE! 🎉' : 'Game Over!';
+    }
+    document.getElementById('gameover-title').textContent = title;
     document.getElementById('final-score').textContent = `Final Score: ${score}`;
     document.getElementById('best-combo-stat').textContent = maxCombo + 'x';
     document.getElementById('gems-matched-stat').textContent = totalGemsMatched;
@@ -696,6 +973,7 @@ function endGame() {
     gameoverModal.classList.add('active');
     
     if (score > currentHigh) AudioManager.success();
+    GameApp.eventBus.emit('gameEnded', { mode: gameMode, score, maxCombo, totalGemsMatched });
 }
 
 function wait(ms) {
@@ -728,8 +1006,65 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
     });
 });
 
+// Pause / Resume
+pauseBtn.addEventListener('click', () => { GameApp.pause(); });
+resumeBtn.addEventListener('click', () => { GameApp.resume(); });
+
+// Settings
+settingsBtn.addEventListener('click', () => {
+    // Populate checkboxes from current settings
+    toggleSoundChk.checked = GameApp.settings.soundEnabled;
+    toggleColorBlindChk.checked = GameApp.settings.colorBlindMode;
+    settingsModal.classList.add('active');
+});
+saveSettingsBtn.addEventListener('click', () => {
+    GameApp.settings.soundEnabled = toggleSoundChk.checked;
+    soundEnabled = GameApp.settings.soundEnabled; // sync global
+    GameApp.settings.setColorBlindMode(toggleColorBlindChk.checked);
+    GameApp.settings.save();
+    applyColorBlindMode(GameApp.settings.colorBlindMode);
+    settingsModal.classList.remove('active');
+});
+closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('active'));
+
+// Achievements modal
+achievementsBtn.addEventListener('click', () => {
+    renderAchievementsModal();
+    achievementsModal.classList.add('active');
+});
+closeAchievementsBtn.addEventListener('click', () => achievementsModal.classList.remove('active'));
+
+// ESC to pause/resume
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        if (GameApp.paused) GameApp.resume(); else GameApp.pause();
+    }
+});
+
+function applyColorBlindMode(enabled) {
+    document.body.classList.toggle('color-blind', !!enabled);
+}
+
+function renderAchievementsModal() {
+    const list = document.getElementById('achievements-list');
+    if (!list) return;
+    list.innerHTML = '';
+    Object.keys(achievements).forEach(key => {
+        const a = achievements[key];
+        const div = document.createElement('div');
+        div.style.padding = '10px';
+        div.style.borderRadius = '10px';
+        div.style.background = a.unlocked ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.15)';
+        div.style.border = a.unlocked ? '2px solid #ffd700' : '2px solid rgba(255,255,255,0.3)';
+        div.innerHTML = `<strong>${a.name}</strong><br><small>${a.desc}</small>`;
+        list.appendChild(div);
+    });
+}
+
 // ========== INITIALIZE ==========
 AudioManager.init();
+applyColorBlindMode(GameApp.settings.colorBlindMode);
+soundEnabled = GameApp.settings.soundEnabled;
 
 // Prevent zoom via ctrl+wheel and iOS gesture
 document.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); } }, { passive: false });
