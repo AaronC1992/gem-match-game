@@ -88,7 +88,7 @@ class Board {
     }
     render() { renderBoard(); }
     shuffle() { shuffleBoard(); }
-    updateGem(row, col) { updateGem(row, col); }
+    updateGem(row, col) { GameApp.renderer.updateGem(row, col); }
     hasAvailableMove() { return hasAvailableMove(); }
     findAvailableMove() { return findAvailableMove(); }
 }
@@ -206,10 +206,7 @@ class Cascader {
         currentCombo = 0;
         updateDisplay();
         GameApp.eventBus.emit('cascadeComplete', { score });
-        if (gameMode === 'classic' && !hasAvailableMove()) shuffleBoard();
-        if (gameMode === 'level') {
-            GameApp.levelSystem.advanceIfComplete(score);
-        }
+        if (!hasAvailableMove()) shuffleBoard();
     }
     async animateGravityAndRefill() {
         // Migrated from animateGemDrop
@@ -307,11 +304,23 @@ class Renderer {
         el2.style.transition = `transform ${ms}ms ease-out`;
         el1.style.transform = `translate(${dx}%, ${dy}%)`;
         el2.style.transform = `translate(${-dx}%, ${-dy}%)`;
+        // Swap elementMap entries so positions stay consistent after animation
+        this.elementMap[gem1.row][gem1.col] = el2;
+        this.elementMap[gem2.row][gem2.col] = el1;
         setTimeout(() => {
             el1.style.transition = '';
             el2.style.transition = '';
             el1.style.transform = '';
             el2.style.transform = '';
+            // Update grid placement so elements sit in their new cells
+            el1.style.gridRowStart = (gem2.row + 1).toString();
+            el1.style.gridColumnStart = (gem2.col + 1).toString();
+            el1.dataset.row = gem2.row;
+            el1.dataset.col = gem2.col;
+            el2.style.gridRowStart = (gem1.row + 1).toString();
+            el2.style.gridColumnStart = (gem1.col + 1).toString();
+            el2.dataset.row = gem1.row;
+            el2.dataset.col = gem1.col;
         }, ms);
     }
     rebuildAfterGravity(boardData) {
@@ -739,7 +748,7 @@ function createGemElement(row, col) {
 
 // ========== GAME LOGIC ==========
 function handleGemClick(row, col) {
-    if (isProcessing || (gameMode === 'classic' && moves <= 0)) return;
+    if (isProcessing || ((gameMode === 'classic' || gameMode === 'level') && moves <= 0)) return;
     
     resetHintTimeout();
     const clickedGem = { row, col };
@@ -801,12 +810,12 @@ async function swapGems(gem1, gem2) {
         return;
     }
     
-    // Valid move - logical swap then centralized animation
+    // Valid move - animate first (elements still show old content), then swap data & update DOM
+    await GameApp.animations.swap(gem1, gem2);
     board[gem1.row][gem1.col] = temp2;
     board[gem2.row][gem2.col] = temp1;
-    await GameApp.animations.swap(gem1, gem2);
     
-    // Update DOM
+    // Update DOM to reflect swapped data
     GameApp.renderer.updateGem(gem1.row, gem1.col);
     GameApp.renderer.updateGem(gem2.row, gem2.col);
     
@@ -820,15 +829,17 @@ async function swapGems(gem1, gem2) {
     isProcessing = false;
     
     if ((gameMode === 'classic' || gameMode === 'level') && moves <= 0) {
-        // In level mode, treat as failure unless target met
         if (gameMode === 'level') {
-            const targetMet = score >= GameApp.levelSystem.current().targetScore;
+            const currentTarget = GameApp.levelSystem.current().targetScore;
+            const targetMet = score >= currentTarget;
             if (targetMet) {
                 GameApp.levelSystem.advanceIfComplete(score);
-            } else {
-                endGame();
             }
-        } else endGame();
+            // Pass the pre-advance target so endGame shows the correct result
+            endGame(currentTarget);
+        } else {
+            endGame();
+        }
     }
     resetHintTimeout();
 }
@@ -914,24 +925,29 @@ function hasAvailableMove() {
 }
 
 function shuffleBoard() {
-    const types = [];
-    for (let row = 0; row < Config.boardSize; row++) {
-        for (let col = 0; col < Config.boardSize; col++) {
-            types.push(board[row][col].type);
+    let attempts = 0;
+    const maxAttempts = 50;
+    do {
+        const types = [];
+        for (let row = 0; row < Config.boardSize; row++) {
+            for (let col = 0; col < Config.boardSize; col++) {
+                types.push(board[row][col].type);
+            }
         }
-    }
 
-    for (let i = types.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [types[i], types[j]] = [types[j], types[i]];
-    }
-
-    let index = 0;
-    for (let row = 0; row < Config.boardSize; row++) {
-        for (let col = 0; col < Config.boardSize; col++) {
-            board[row][col] = { type: types[index++], special: null };
+        for (let i = types.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [types[i], types[j]] = [types[j], types[i]];
         }
-    }
+
+        let index = 0;
+        for (let row = 0; row < Config.boardSize; row++) {
+            for (let col = 0; col < Config.boardSize; col++) {
+                board[row][col] = { type: types[index++], special: null };
+            }
+        }
+        attempts++;
+    } while (attempts < maxAttempts && (GameApp.matches.findMatches().length > 0 || !hasAvailableMove()));
 
     GameApp.renderer.renderAll(board);
 }
@@ -949,7 +965,7 @@ function updateDisplay() {
     }
 }
 
-function endGame() {
+function endGame(levelTarget) {
     if (gameTimer) clearInterval(gameTimer);
     
     const highScoreKey = `highScore_${gameMode}`;
@@ -958,7 +974,7 @@ function endGame() {
     
     let title;
     if (gameMode === 'level') {
-        const target = GameApp.levelSystem.current().targetScore;
+        const target = levelTarget != null ? levelTarget : GameApp.levelSystem.current().targetScore;
         title = score >= target ? '✅ Level Complete!' : 'Level Failed';
     } else {
         title = score > currentHigh ? '🎉 NEW HIGH SCORE! 🎉' : 'Game Over!';
@@ -1074,7 +1090,7 @@ document.querySelector('#game-board')?.addEventListener('dblclick', (e) => { e.p
 // Optional: expose a simple mute toggle via keyboard (m)
 document.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'm') {
-        soundEnabled = !soundEnabled;
+        GameApp.settings.toggleSound();
     }
 });
 
